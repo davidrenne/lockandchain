@@ -17,13 +17,7 @@
         <!-- END grid_row -->
     </div>
 
-    <div id="player_hand">
-        <!-- BEGIN player_card -->
-        <div class="player_card" id="player_card_{CARD_ID}">
-            <img src="img/lockandchainnumbers_{CARD_COLOR}_{CARD_NUMBER}.png" />
-        </div>
-        <!-- END player_card -->
-    </div>
+    <div id="player_hand"></div>
 
     <div id="player_boards">
         <!-- BEGIN player_board -->
@@ -31,13 +25,5 @@
         <!-- END player_board -->
     </div>
 </div>
-
-<script type="text/javascript">
-// JavaScript HTML templates
-
-var jstpl_player_hand = '<div class="player-hand" id="player-hand-${player_id}">${cards}</div>';
-var jstpl_player_card = '<div class="player_card" id="player_card_${CARD_ID}"><img src="img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" /></div>';
-
-</script>
 
 {OVERALL_GAME_FOOTER}

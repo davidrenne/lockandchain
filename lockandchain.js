@@ -1,20 +1,3 @@
-/**
- *------
- * BGA framework: Gregory Isabelli & Emmanuel Colin & BoardGameArena
- * LockAndChain implementation : © <Your name here> <Your email address here>
- *
- * This code has been produced on the BGA studio platform for use on http://boardgamearena.com.
- * See http://en.boardgamearena.com/#!doc/Studio for more information.
- * -----
- *
- * lockandchain.js
- *
- * LockAndChain user interface script
- *
- * In this file, you are describing the logic of your user interface, in Javascript language.
- *
- */
-
 define([
   "dojo",
   "dojo/_base/declare",
@@ -24,14 +7,6 @@ define([
   return declare("bgagame.lockandchain", ebg.core.gamegui, {
     constructor: function () {
       console.log("lockandchain constructor");
-
-      // Here, you can init the global variables of your user interface
-      // Example:
-      // this.myGlobalValue = 0;
-    },
-
-    setup: function (gamedatas) {
-      console.log("Starting game setup");
 
       // Define the player hand template
       this.jstpl_player_hand =
@@ -49,6 +24,10 @@ define([
         this.jstpl_player_hand,
         this.jstpl_player_card
       );
+    },
+
+    setup: function (gamedatas) {
+      console.log("Starting game setup");
 
       // Setting up player boards and hands
       for (var player_id in gamedatas.players) {
