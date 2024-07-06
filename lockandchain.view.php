@@ -8,6 +8,7 @@ class view_lockandchain_lockandchain extends game_view
   {
     return "lockandchain";
   }
+
   function build_page($viewArgs)
   {
     // Custom view logic here
@@ -15,17 +16,23 @@ class view_lockandchain_lockandchain extends game_view
     $players = $this->game->loadPlayersBasicInfos();
     $template = self::getGameName() . "_" . self::getGameName();
 
-    // Sample code to place player panels
+    // Begin block for player cards in hand
+    $this->page->begin_block($template, "player_card");
+
+    // Sample code to place player cards
     foreach ($players as $player_id => $info) {
-      $this->tpl['PLAYER_PANEL'] .= self::_(
-        "{$template}_player_panel.tpl",
-        array(
-          'PLAYER_ID' => $player_id,
-          'PLAYER_NAME' => $info['player_name']
+      // Assuming you have a method to get player cards
+      $cards = $this->game->getPlayerCards($player_id);
+      foreach ($cards as $card) {
+        $this->page->insert_block("player_card", array(
+          'CARD_ID' => $card['id'],
+          'CARD_COLOR' => $card['color'],
+          'CARD_NUMBER' => $card['number']
         )
-      );
+        );
+      }
     }
+
+    // No need to add player board logic here as the grid is static in the template
   }
 }
-
-?>
