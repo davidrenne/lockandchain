@@ -17,7 +17,7 @@ define([
 
       // Define the player card template
       this.jstpl_player_card = dojo.string.substitute(
-        '<div class="player_card" id="player_card_${CARD_ID}"><img src="img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" /></div>',
+        '<div class="player_card" id="player_card_${CARD_ID}" draggable="true"><img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" /></div>',
         { CARD_ID: "", CARD_COLOR: "", CARD_NUMBER: "" }
       );
 
@@ -52,25 +52,37 @@ define([
 
       // Make cards in player's hand draggable
       if (this.isCurrentPlayerActive()) {
-        dojo.query("#player_hand .player_card").forEach(
-          dojo.hitch(this, function (card) {
-            new dojo.dnd.Moveable(card);
-            dojo.connect(card, "onclick", this, "onPlayerCardClick");
-          })
-        );
+        this.makeCardsDraggable();
       }
 
       // Make board cells droppable
-      dojo.query(".grid_cell").forEach(
-        dojo.hitch(this, function (cell) {
-          new dojo.dnd.Target(cell, { accept: ["player_card"] });
-          dojo.connect(cell, "ondrop", this, "onCardDrop");
-        })
-      );
+      this.makeCellsDroppable();
 
       this.setupNotifications();
 
       console.log("Ending game setup");
+    },
+
+    makeCardsDraggable: function () {
+      dojo.query("#player_hand .player_card").forEach(
+        dojo.hitch(this, function (card) {
+          dojo.connect(card, "ondragstart", this, function (evt) {
+            evt.dataTransfer.setData("text", evt.target.id);
+          });
+          dojo.connect(card, "onclick", this, "onPlayerCardClick");
+        })
+      );
+    },
+
+    makeCellsDroppable: function () {
+      dojo.query(".grid_cell").forEach(
+        dojo.hitch(this, function (cell) {
+          dojo.connect(cell, "ondragover", function (evt) {
+            evt.preventDefault();
+          });
+          dojo.connect(cell, "ondrop", this, "onCardDrop");
+        })
+      );
     },
 
     onPlayerCardClick: function (evt) {
@@ -148,14 +160,19 @@ define([
       // Example implementation of handling the card played notification
       var card_id = notif.args.card_id;
       var cell_id = notif.args.cell_id;
-      dojo.place(
-        '<img src="img/lockandchainnumbers_' +
-          notif.args.card_color +
-          "_" +
-          notif.args.card_number +
-          '.png" />',
-        "cell_" + cell_id
-      );
+      var cardElement = dojo.byId("player_card_" + card_id);
+      if (cardElement) {
+        dojo.place(cardElement, "cell_" + cell_id);
+      } else {
+        dojo.place(
+          '<img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_' +
+            notif.args.card_color +
+            "_" +
+            notif.args.card_number +
+            '.png" />',
+          "cell_" + cell_id
+        );
+      }
     },
   });
 });
