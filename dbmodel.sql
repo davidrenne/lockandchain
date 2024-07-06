@@ -1,35 +1,61 @@
+-- Ensure player and global tables exist
+-- (Assuming these tables are managed by BGA framework and already exist)
 
--- ------
--- BGA framework: Gregory Isabelli & Emmanuel Colin & BoardGameArena
--- LockAndChain implementation : © <Your name here> <Your email address here>
--- 
--- This code has been produced on the BGA studio platform for use on http://boardgamearena.com.
--- See http://en.boardgamearena.com/#!doc/Studio for more information.
--- -----
+-- Create Cards table
+CREATE TABLE IF NOT EXISTS `Cards` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `number` INT NOT NULL,
+    `color` VARCHAR(7) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
--- dbmodel.sql
+-- Create PlayerHands table
+CREATE TABLE IF NOT EXISTS `PlayerHands` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `player_id` INT,
+    `card_id` INT,
+    FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
+    FOREIGN KEY (`card_id`) REFERENCES `Cards`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
--- This is the file where you are describing the database schema of your game
--- Basically, you just have to export from PhpMyAdmin your table structure and copy/paste
--- this export here.
--- Note that the database itself and the standard tables ("global", "stats", "gamelog" and "player") are
--- already created and must not be created here
+-- Create CardPlacements table
+CREATE TABLE IF NOT EXISTS `CardPlacements` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `game_id` INT,
+    `card_id` INT,
+    `player_id` INT,
+    `position` INT,
+    FOREIGN KEY (`game_id`) REFERENCES `global`(`global_id`),
+    FOREIGN KEY (`card_id`) REFERENCES `Cards`(`id`),
+    FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
--- Note: The database schema is created from this file when the game starts. If you modify this file,
---       you have to restart a game to see your changes in database.
+-- Create Chains table
+CREATE TABLE IF NOT EXISTS `Chains` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `player_id` INT,
+    `start_position` INT,
+    `end_position` INT,
+    FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
--- Example 1: create a standard "card" table to be used with the "Deck" tools (see example game "hearts"):
+-- Create Locks table
+CREATE TABLE IF NOT EXISTS `Locks` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `player_id` INT,
+    `start_position` INT,
+    `end_position` INT,
+    FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
--- CREATE TABLE IF NOT EXISTS `card` (
---   `card_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
---   `card_type` varchar(16) NOT NULL,
---   `card_type_arg` int(11) NOT NULL,
---   `card_location` varchar(16) NOT NULL,
---   `card_location_arg` int(11) NOT NULL,
---   PRIMARY KEY (`card_id`)
--- ) ENGINE=InnoDB DEFAULT CHARSET=utf8 AUTO_INCREMENT=1 ;
-
-
--- Example 2: add a custom field to the standard "player" table
--- ALTER TABLE `player` ADD `player_my_custom_field` INT UNSIGNED NOT NULL DEFAULT '0';
-
+-- Create GameActions table
+CREATE TABLE IF NOT EXISTS `GameActions` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `game_id` INT,
+    `player_id` INT,
+    `action_type` VARCHAR(50),
+    `card_id` INT,
+    `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`game_id`) REFERENCES `global`(`global_id`),
+    FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
+    FOREIGN KEY (`card_id`) REFERENCES `Cards`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
