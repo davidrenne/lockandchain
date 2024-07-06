@@ -26,7 +26,8 @@ class view_lockandchain_lockandchain extends game_view
 
     // Sample code to place player cards
     foreach ($players as $player_id => $info) {
-      $cards = $this->game->getPlayerCards($player_id);
+      // Assume $viewArgs contains player card data in a structure like $viewArgs['playerHands'][$player_id]
+      $cards = isset($viewArgs['playerHands'][$player_id]) ? $viewArgs['playerHands'][$player_id] : [];
       foreach ($cards as $card) {
         $this->page->insert_block(
           "player_card",

@@ -1,9 +1,21 @@
 <?php
 // Define game state IDs
-define("ST_BGA_GAME_SETUP", 1);
-define("ST_PLAYER_TURN", 2);
-define("ST_NEXT_PLAYER", 3);
-define("ST_END_GAME", 99);
+if (!defined('ST_BGA_GAME_SETUP')) {
+  define('ST_BGA_GAME_SETUP', 1);
+}
+
+if (!defined('ST_PLAYER_TURN')) {
+  define('ST_PLAYER_TURN', 2);
+}
+
+if (!defined('ST_NEXT_PLAYER')) {
+  define('ST_NEXT_PLAYER', 3);
+}
+
+if (!defined('ST_END_GAME')) {
+  define('ST_END_GAME', 99999);
+}
+
 
 $machinestates = array(
   // The initial state. Please do not modify.

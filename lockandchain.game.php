@@ -26,7 +26,7 @@ class LockAndChain extends Table
       try {
         self::DbQuery("START TRANSACTION");
 
-        // SQL queries for creating necessary tables without foreign key constraints
+        // SQL queries for creating necessary tables with foreign key constraints
         $sqlStatements = [
           "CREATE TABLE IF NOT EXISTS `Cards` (
                         `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -37,7 +37,8 @@ class LockAndChain extends Table
           "CREATE TABLE IF NOT EXISTS `PlayerHands` (
                         `id` INT AUTO_INCREMENT PRIMARY KEY,
                         `player_id` INT,
-                        `card_id` INT
+                        `card_id` INT,
+                        FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`) ON DELETE CASCADE
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
 
           "CREATE TABLE IF NOT EXISTS `CardPlacements` (
@@ -165,4 +166,19 @@ class LockAndChain extends Table
     $colors = array("ff0000", "008000", "0000ff", "ffa500", "773300");
     return $colors[$player_id % count($colors)];
   }
+
+  // Handle zombie player turns
+  public function zombieTurn($state, $active_player)
+  {
+    $statename = $state['name'];
+
+    if ($statename == 'playerTurn') {
+      // Skip the zombie player's turn
+      $this->gamestate->nextState('zombiePass');
+    } else {
+      // Default action: pass
+      $this->gamestate->nextState('zombiePass');
+    }
+  }
+
 }

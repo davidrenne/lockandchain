@@ -1,44 +1,45 @@
 {OVERALL_GAME_HEADER}
 
-<!-- 
---------
--- BGA framework: Gregory Isabelli & Emmanuel Colin & BoardGameArena
--- LockAndChain implementation : © <Your name here> <Your email address here>
--- 
--- This code has been produced on the BGA studio platform for use on http://boardgamearena.com.
--- See http://en.boardgamearena.com/#!doc/Studio for more information.
--------
+<div id="game_area">
+    <h1>Lock and Chain</h1>
 
-    lockandchain_lockandchain.tpl
-    
-    This is the HTML template of your game.
-    
-    Everything you are writing in this file will be displayed in the HTML page of your game user interface,
-    in the "main game zone" of the screen.
-    
-    You can use in this template:
-    _ variables, with the format {MY_VARIABLE_ELEMENT}.
-    _ HTML block, with the BEGIN/END format
-    
-    See your "view" PHP file to check how to set variables and control blocks
-    
-    Please REMOVE this comment before publishing your game on BGA
--->
+    <div id="board">
+        <!-- Generate 6x6 grid -->
+        <!-- BEGIN grid_row -->
+        <div class="grid_row">
+            <!-- BEGIN grid_cell -->
+            <div class="grid_cell" id="cell_{ROW}_{COL}">
+                <img src="img/lockandchainnumbers_board_{CELL_ID}.png" class="board_card" />
+                <div class="card_placeholder"></div>
+            </div>
+            <!-- END grid_cell -->
+        </div>
+        <!-- END grid_row -->
+    </div>
 
+    <div id="player_hand">
+        <!-- BEGIN player_card -->
+        <div class="player_card" id="player_card_{CARD_ID}">
+            <img src="img/lockandchainnumbers_{CARD_COLOR}_{CARD_NUMBER}.png" />
+        </div>
+        <!-- END player_card -->
+    </div>
 
-This is your game interface. You can edit this HTML in your ".tpl" file.
-
+    <div id="player_boards">
+        <!-- BEGIN player_board -->
+        <div id="player_board_{PLAYER_ID}" class="player_board"></div>
+        <!-- END player_board -->
+    </div>
+</div>
 
 <script type="text/javascript">
-
-// Javascript HTML templates
+// JavaScript HTML templates
 
 /*
 // Example:
-var jstpl_some_game_item='<div class="my_game_item" id="my_game_item_${MY_ITEM_ID}"></div>';
-
+var jstpl_some_game_item = '<div class="my_game_item" id="my_game_item_${MY_ITEM_ID}"></div>';
 */
 
-</script>  
+</script>
 
 {OVERALL_GAME_FOOTER}
