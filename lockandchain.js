@@ -14,10 +14,9 @@ define([
 
       // Define the player card template
       this.jstpl_player_card =
-        '<div class="player_card" id="player_card_${CARD_ID}">';
-      this.jstpl_player_card +=
-        '<img src="img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" />';
-      this.jstpl_player_card += "</div>";
+        '<div class="player_card" id="player_card_${CARD_ID}">' +
+        '<img src="img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" />' +
+        "</div>";
 
       console.log(
         "Templates defined:",

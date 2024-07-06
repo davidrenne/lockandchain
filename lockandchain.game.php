@@ -1,4 +1,5 @@
 <?php
+
 require_once (APP_GAMEMODULE_PATH . 'module/table/table.game.php');
 
 class LockAndChain extends Table
@@ -12,6 +13,8 @@ class LockAndChain extends Table
         // Other game state labels
       )
     );
+    $this->cards = self::getNew("module.common.deck");
+
   }
 
   protected function getGameName()
@@ -83,7 +86,6 @@ class LockAndChain extends Table
     foreach ($queries as $query) {
       self::DbQuery($query);
     }
-
     // Setup other game elements
     // Initialize players
     $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar) VALUES ";
@@ -109,14 +111,16 @@ class LockAndChain extends Table
   {
     // Each player gets a deck of cards 1-36
     $cards = array();
-    for ($i = 1; $i <= 36; $i++) {
-      foreach ($this->getPlayers() as $player_id => $player) {
+    $players = $this->loadPlayersBasicInfos();
+    foreach ($players as $player_id => $player) {
+      for ($i = 1; $i <= 36; $i++) {
         $cards[] = array('type' => 'card', 'type_arg' => $i, 'location' => 'deck', 'location_arg' => $player_id);
       }
     }
     $this->cards->createCards($cards, 'deck');
     $this->cards->shuffle('deck');
   }
+
 
   // Fetch player cards
   public function getPlayerCards($player_id)
@@ -156,6 +160,8 @@ class LockAndChain extends Table
     // Move to the next state
     $this->gamestate->nextState('playCard');
   }
+
+
   function getAllDatas()
   {
     $result = array();
@@ -165,4 +171,23 @@ class LockAndChain extends Table
     $result['cardPlacements'] = self::getObjectListFromDB("SELECT * FROM CardPlacements");
     return $result;
   }
+
+
+  // Define the missing getPlayerColor method
+  private function getPlayerColor($player_id)
+  {
+    // You need to define your player colors here
+    // For example, return a color based on the player's ID or other logic
+    $colors = array(
+      1 => 'blue',   // Blue
+      2 => 'green',  // Green
+      3 => 'purple', // Purple
+      4 => 'red'     // Red
+    );
+
+    return $colors[($player_id % 4) + 1];
+  }
+
+  // Other necessary methods...
 }
+?>
