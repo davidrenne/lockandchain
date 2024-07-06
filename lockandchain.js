@@ -30,7 +30,6 @@ define([
 
     setup: function (gamedatas) {
       console.log("Starting game setup");
-
       // Setting up player boards and hands
       for (var player_id in gamedatas.players) {
         var player = gamedatas.players[player_id];
