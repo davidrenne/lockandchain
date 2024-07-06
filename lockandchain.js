@@ -36,32 +36,74 @@ define([
         var player = gamedatas.players[player_id];
 
         // Setup player hand
-        var cards_html = "";
         if (gamedatas.playerHands && gamedatas.playerHands[player_id]) {
           gamedatas.playerHands[player_id].forEach((card) => {
-            cards_html += dojo.string.substitute(this.jstpl_player_card, {
-              CARD_ID: card.card_id,
-              CARD_COLOR: card.card_type,
-              CARD_NUMBER: card.card_type_arg,
-            });
+            dojo.place(
+              this.format_block("jstpl_player_card", {
+                CARD_ID: card.card_id,
+                CARD_COLOR: card.card_type,
+                CARD_NUMBER: card.card_type_arg.toString().padStart(2, "0"),
+              }),
+              "player_hand"
+            );
           });
         }
+      }
 
-        console.log("Player hand HTML for player", player_id, cards_html);
-
-        dojo.place(
-          dojo.string.substitute(this.jstpl_player_hand, {
-            player_id: player_id,
-            cards: cards_html,
-          }),
-          "player_hand"
+      // Make cards in player's hand draggable
+      if (this.isCurrentPlayerActive()) {
+        dojo.query("#player_hand .player_card").forEach(
+          dojo.hitch(this, function (card) {
+            new dojo.dnd.Moveable(card);
+            dojo.connect(card, "onclick", this, "onPlayerCardClick");
+          })
         );
       }
 
-      // Setup game notifications to handle (see "setupNotifications" method below)
+      // Make board cells droppable
+      dojo.query(".grid_cell").forEach(
+        dojo.hitch(this, function (cell) {
+          new dojo.dnd.Target(cell, { accept: ["player_card"] });
+          dojo.connect(cell, "ondrop", this, "onCardDrop");
+        })
+      );
+
       this.setupNotifications();
 
       console.log("Ending game setup");
+    },
+
+    onPlayerCardClick: function (evt) {
+      var cardId = evt.currentTarget.id.split("_")[2];
+      if (this.checkAction("playCard", true)) {
+        this.ajaxcall(
+          "/lockandchain/lockandchain/playCard.html",
+          {
+            card_id: cardId,
+            lock: false,
+          },
+          this,
+          function (result) {}
+        );
+      }
+    },
+
+    onCardDrop: function (evt) {
+      evt.preventDefault();
+      var cardId = evt.dataTransfer.getData("text").split("_")[2];
+      var cellId = evt.currentTarget.id.split("_")[2];
+      if (this.checkAction("playCard", true)) {
+        this.ajaxcall(
+          "/lockandchain/lockandchain/playCard.html",
+          {
+            card_id: cardId,
+            cell_id: cellId,
+            lock: false,
+          },
+          this,
+          function (result) {}
+        );
+      }
     },
 
     onEnteringState: function (stateName, args) {

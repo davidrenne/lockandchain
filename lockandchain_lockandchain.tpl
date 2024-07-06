@@ -4,7 +4,6 @@
     <h1>Lock and Chain</h1>
 
     <div id="board">
-        <!-- Generate 6x6 grid -->
         <!-- BEGIN grid_row -->
         <div class="grid_row">
             <!-- BEGIN grid_cell -->

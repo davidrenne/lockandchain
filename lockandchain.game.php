@@ -111,9 +111,7 @@ class LockAndChain extends Table
 
   public function getPlayerCards($player_id)
   {
-    // Fetch the cards for a specific player
-    $sql = "SELECT * FROM `PlayerHands` WHERE `player_id` = $player_id";
-    return self::getCollectionFromDb($sql);
+    return self::getObjectListFromDB("SELECT c.* FROM Cards c JOIN PlayerHands ph ON c.card_id = ph.card_id WHERE ph.player_id = $player_id");
   }
 
   // Initialize decks 
@@ -152,36 +150,127 @@ class LockAndChain extends Table
   }
 
   // Handle player actions
-  public function playCard($card_id, $cell_id)
+  public function playCard($card_id, $cell_id, $lock = false)
   {
     $player_id = self::getActivePlayerId();
 
     $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id");
     $card_value = $card['card_type_arg'];
-    $card_color = $card['card_type']; // Assuming there is a color field in your card definition
+    $card_color = $card['card_type'];
 
-    // Validate the move and update the game state
-    // (e.g., check if the card can be played, update game state)
+    // Validate the move
+    $this->validateCardPlay($player_id, $card_id, $cell_id);
+
+    // Update the game state
+    self::DbQuery("UPDATE Cards SET card_location = 'board', card_location_arg = $cell_id WHERE card_id = $card_id");
+    self::DbQuery("DELETE FROM PlayerHands WHERE card_id = $card_id");
+    self::DbQuery("INSERT INTO CardPlacements (game_id, card_id, player_id, position) VALUES ({$this->getGameId()}, $card_id, $player_id, $cell_id)");
+
+    // Check for chains and locks
+    $this->checkChainsAndLocks($player_id, $card_id, $cell_id, $lock);
 
     // Notify players
     self::notifyAllPlayers(
-      'playCard',
+      'cardPlayed',
       clienttranslate('${player_name} plays ${card_value} on cell ${cell_id}'),
       array(
+        'player_id' => $player_id,
         'player_name' => self::getActivePlayerName(),
+        'card_id' => $card_id,
         'card_value' => $card_value,
+        'card_color' => $card_color,
         'cell_id' => $cell_id,
-        'card_color' => $card_color
+        'lock' => $lock
       )
     );
 
-    // Check for chains and locks
-    $this->checkChainsAndLocks($player_id, $card_id, $cell_id);
-
-    // Move to the next state
-    $this->gamestate->nextState('playCard');
+    // Check for game end conditions
+    if ($this->checkEndGame()) {
+      $this->gamestate->nextState('endGame');
+    } else {
+      // Move to the next player
+      $this->gamestate->nextState('nextPlayer');
+    }
   }
 
+  private function validateCardPlay($player_id, $card_id, $cell_id)
+  {
+    // Check if the card belongs to the player
+    $card = self::getObjectFromDB("SELECT * FROM PlayerHands WHERE card_id = $card_id AND player_id = $player_id");
+    if (!$card) {
+      throw new BgaUserException(self::_("You don't have this card in your hand"));
+    }
+
+    // Check if the cell is empty
+    $existing_card = self::getObjectFromDB("SELECT * FROM CardPlacements WHERE position = $cell_id");
+    if ($existing_card) {
+      throw new BgaUserException(self::_("This cell is already occupied"));
+    }
+
+    // Check for chains and locks
+    $chains = self::getObjectListFromDB("SELECT * FROM Chains WHERE player_id != $player_id");
+    $locks = self::getObjectListFromDB("SELECT * FROM Locks");
+
+    foreach ($chains as $chain) {
+      if ($cell_id > $chain['start_position'] && $cell_id < $chain['end_position']) {
+        throw new BgaUserException(self::_("You cannot play within another player's chain"));
+      }
+    }
+
+    foreach ($locks as $lock) {
+      if ($cell_id >= $lock['start_position'] && $cell_id <= $lock['end_position']) {
+        throw new BgaUserException(self::_("You cannot play on a locked position"));
+      }
+    }
+  }
+
+  private function checkChainsAndLocks($player_id, $card_id, $cell_id, $lock)
+  {
+    $player_cards = self::getObjectListFromDB("SELECT * FROM CardPlacements WHERE player_id = $player_id ORDER BY position");
+
+    // Check for chains
+    for ($i = 0; $i < count($player_cards) - 1; $i++) {
+      if ($player_cards[$i + 1]['position'] - $player_cards[$i]['position'] > 1) {
+        self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, {$player_cards[$i]['position']}, {$player_cards[$i + 1]['position']})");
+      }
+    }
+
+    // Check for locks
+    if ($lock) {
+      $consecutive_cards = 1;
+      $start_position = $cell_id;
+      $end_position = $cell_id;
+
+      foreach ($player_cards as $card) {
+        if ($card['position'] == $cell_id - 1) {
+          $consecutive_cards++;
+          $start_position = $card['position'];
+        } elseif ($card['position'] == $cell_id + 1) {
+          $consecutive_cards++;
+          $end_position = $card['position'];
+        }
+      }
+
+      if ($consecutive_cards >= 3) {
+        self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $start_position, $end_position)");
+      }
+    }
+  }
+
+  private function checkEndGame()
+  {
+    $players = self::loadPlayersBasicInfos();
+    $active_players = 0;
+
+    foreach ($players as $player_id => $player) {
+      $hand = $this->getPlayerCards($player_id);
+      if (!empty($hand)) {
+        $active_players++;
+      }
+    }
+
+    return $active_players <= 1;
+  }
   function getAllDatas()
   {
     $result = array();
