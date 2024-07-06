@@ -13,10 +13,6 @@ class LockAndChain extends Table
         // Other game state labels
       )
     );
-
-    // Initialize the cards deck module
-    $this->cards = self::getNew("module.common.deck");
-    $this->cards->init("Cards"); // Initialize the deck with the card table
   }
 
   protected function getGameName()
@@ -113,19 +109,32 @@ class LockAndChain extends Table
     $this->activeNextPlayer();
   }
 
-  // Initialize decks
+  // Initialize decks 
   private function initDecks()
   {
-    // Each player gets a deck of cards 1-36
     $cards = array();
-    $players = $this->loadPlayersBasicInfos();
-    foreach ($players as $player_id => $player) {
-      for ($i = 1; $i <= 36; $i++) {
+    for ($i = 1; $i <= 36; $i++) {
+      foreach ($this->getPlayers() as $player_id => $player) {
         $cards[] = array('type' => 'card', 'type_arg' => $i, 'location' => 'deck', 'location_arg' => $player_id);
       }
     }
-    $this->cards->createCards($cards, 'deck');
-    $this->cards->shuffle('deck');
+
+    // Insert cards into the database
+    foreach ($cards as $card) {
+      $sql = "INSERT INTO Cards (card_type, card_type_arg, card_location, card_location_arg) VALUES ('card', {$card['type_arg']}, 'deck', {$card['location_arg']})";
+      self::DbQuery($sql);
+    }
+
+    // Shuffle the deck
+    $this->shuffleDeck();
+
+  }
+
+  private function shuffleDeck()
+  {
+    // Shuffle the deck by updating card_location_arg with random values
+    $sql = "UPDATE Cards SET card_location_arg = FLOOR(1 + RAND() * 100)";
+    self::DbQuery($sql);
   }
 
   // Handle player actions
@@ -133,10 +142,9 @@ class LockAndChain extends Table
   {
     $player_id = self::getActivePlayerId();
 
-    // Fetch the card details using card_id
-    $card = $this->cards->getCard($card_id);
-    $card_value = $card['type_arg'];
-    $card_color = $card['color']; // Assuming there is a color field in your card definition
+    $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id");
+    $card_value = $card['card_type_arg'];
+    $card_color = $card['card_type']; // Assuming there is a color field in your card definition
 
     // Validate the move and update the game state
     // (e.g., check if the card can be played, update game state)
