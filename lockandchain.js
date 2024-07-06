@@ -44,6 +44,12 @@ define([
         '<img src="img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" />';
       this.jstpl_player_card += "</div>";
 
+      console.log(
+        "Templates defined:",
+        this.jstpl_player_hand,
+        this.jstpl_player_card
+      );
+
       // Setting up player boards and hands
       for (var player_id in gamedatas.players) {
         var player = gamedatas.players[player_id];
@@ -53,15 +59,18 @@ define([
         if (gamedatas.playerHands && gamedatas.playerHands[player_id]) {
           for (var i in gamedatas.playerHands[player_id]) {
             var card = gamedatas.playerHands[player_id][i];
-            cards_html += this.format_block("jstpl_player_card", {
+            cards_html += this.format_block(this.jstpl_player_card, {
               CARD_ID: card.id,
               CARD_COLOR: card.color,
               CARD_NUMBER: card.number,
             });
           }
         }
+
+        console.log("Player hand HTML for player", player_id, cards_html);
+
         dojo.place(
-          this.format_block("jstpl_player_hand", {
+          this.format_block(this.jstpl_player_hand, {
             player_id: player_id,
             cards: cards_html,
           }),

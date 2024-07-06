@@ -35,10 +35,8 @@
 <script type="text/javascript">
 // JavaScript HTML templates
 
-/*
-// Example:
-var jstpl_some_game_item = '<div class="my_game_item" id="my_game_item_${MY_ITEM_ID}"></div>';
-*/
+var jstpl_player_hand = '<div class="player-hand" id="player-hand-${player_id}">${cards}</div>';
+var jstpl_player_card = '<div class="player_card" id="player_card_${CARD_ID}"><img src="img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" /></div>';
 
 </script>
 
