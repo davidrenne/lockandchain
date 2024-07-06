@@ -13,8 +13,10 @@ class LockAndChain extends Table
         // Other game state labels
       )
     );
-    $this->cards = self::getNew("module.common.deck");
 
+    // Initialize the cards deck module
+    $this->cards = self::getNew("module.common.deck");
+    $this->cards->init("card"); // Initialize the deck with the card table
   }
 
   protected function getGameName()
@@ -26,50 +28,62 @@ class LockAndChain extends Table
   // Setup new game
   protected function setupNewGame($players, $options = array())
   {
-    // SQL queries for creating necessary tables with foreign key constraints
-    $queries = [
-      "CREATE TABLE IF NOT EXISTS `Cards` (
-                `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `number` INT NOT NULL,
-                `color` VARCHAR(7) NOT NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
+    // Create necessary tables using structured DbQuery calls
+    self::DbQuery("
+            CREATE TABLE IF NOT EXISTS `Cards` (
+                `card_id` INT AUTO_INCREMENT PRIMARY KEY,
+                `card_type` VARCHAR(32) NOT NULL,
+                `card_type_arg` INT NOT NULL,
+                `card_location` VARCHAR(32) NOT NULL,
+                `card_location_arg` INT NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+        ");
 
-      "CREATE TABLE IF NOT EXISTS `PlayerHands` (
+    self::DbQuery("
+            CREATE TABLE IF NOT EXISTS `PlayerHands` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `player_id` INT,
                 `card_id` INT,
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
-                FOREIGN KEY (`card_id`) REFERENCES `Cards`(`id`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
+                FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+        ");
 
-      "CREATE TABLE IF NOT EXISTS `CardPlacements` (
+    self::DbQuery("
+            CREATE TABLE IF NOT EXISTS `CardPlacements` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `game_id` INT,
                 `card_id` INT,
                 `player_id` INT,
                 `position` INT,
                 FOREIGN KEY (`game_id`) REFERENCES `global`(`global_id`),
-                FOREIGN KEY (`card_id`) REFERENCES `Cards`(`id`),
+                FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`),
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+        ");
 
-      "CREATE TABLE IF NOT EXISTS `Chains` (
+    self::DbQuery("
+            CREATE TABLE IF NOT EXISTS `Chains` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `player_id` INT,
                 `start_position` INT,
                 `end_position` INT,
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+        ");
 
-      "CREATE TABLE IF NOT EXISTS `Locks` (
+    self::DbQuery("
+            CREATE TABLE IF NOT EXISTS `Locks` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `player_id` INT,
                 `start_position` INT,
                 `end_position` INT,
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+        ");
 
-      "CREATE TABLE IF NOT EXISTS `GameActions` (
+    self::DbQuery("
+            CREATE TABLE IF NOT EXISTS `GameActions` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `game_id` INT,
                 `player_id` INT,
@@ -78,15 +92,10 @@ class LockAndChain extends Table
                 `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (`game_id`) REFERENCES `global`(`global_id`),
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
-                FOREIGN KEY (`card_id`) REFERENCES `Cards`(`id`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;"
-    ];
+                FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+        ");
 
-    // Execute each query
-    foreach ($queries as $query) {
-      self::DbQuery($query);
-    }
-    // Setup other game elements
     // Initialize players
     $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar) VALUES ";
     $values = array();
@@ -121,14 +130,6 @@ class LockAndChain extends Table
     $this->cards->shuffle('deck');
   }
 
-
-  // Fetch player cards
-  public function getPlayerCards($player_id)
-  {
-    $sql = "SELECT c.id, c.number, c.color FROM Cards c JOIN PlayerHands ph ON c.id = ph.card_id WHERE ph.player_id = $player_id";
-    return self::getCollectionFromDb($sql);
-  }
-
   // Handle player actions
   public function playCard($card_id, $cell_id)
   {
@@ -161,7 +162,6 @@ class LockAndChain extends Table
     $this->gamestate->nextState('playCard');
   }
 
-
   function getAllDatas()
   {
     $result = array();
@@ -190,4 +190,3 @@ class LockAndChain extends Table
 
   // Other necessary methods...
 }
-?>
