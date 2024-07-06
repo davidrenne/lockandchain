@@ -16,25 +16,22 @@ class LockAndChain extends Table
 
   protected function getGameName()
   {
+    // Used for translations and stuff. Please do not modify.
     return "lockandchain";
   }
 
+  // Setup new game
   protected function setupNewGame($players, $options = array())
   {
-    $maxRetries = 3;
-    for ($retry = 0; $retry < $maxRetries; $retry++) {
-      try {
-        self::DbQuery("START TRANSACTION");
-
-        // SQL queries for creating necessary tables with foreign key constraints
-        $sqlStatements = [
-          "CREATE TABLE IF NOT EXISTS `Cards` (
+    // SQL queries for creating necessary tables with foreign key constraints
+    $queries = [
+      "CREATE TABLE IF NOT EXISTS `Cards` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `number` INT NOT NULL,
                 `color` VARCHAR(7) NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
 
-          "CREATE TABLE IF NOT EXISTS `PlayerHands` (
+      "CREATE TABLE IF NOT EXISTS `PlayerHands` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `player_id` INT,
                 `card_id` INT,
@@ -42,7 +39,7 @@ class LockAndChain extends Table
                 FOREIGN KEY (`card_id`) REFERENCES `Cards`(`id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
 
-          "CREATE TABLE IF NOT EXISTS `CardPlacements` (
+      "CREATE TABLE IF NOT EXISTS `CardPlacements` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `game_id` INT,
                 `card_id` INT,
@@ -53,7 +50,7 @@ class LockAndChain extends Table
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
 
-          "CREATE TABLE IF NOT EXISTS `Chains` (
+      "CREATE TABLE IF NOT EXISTS `Chains` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `player_id` INT,
                 `start_position` INT,
@@ -61,7 +58,7 @@ class LockAndChain extends Table
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
 
-          "CREATE TABLE IF NOT EXISTS `Locks` (
+      "CREATE TABLE IF NOT EXISTS `Locks` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `player_id` INT,
                 `start_position` INT,
@@ -69,7 +66,7 @@ class LockAndChain extends Table
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8;",
 
-          "CREATE TABLE IF NOT EXISTS `GameActions` (
+      "CREATE TABLE IF NOT EXISTS `GameActions` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `game_id` INT,
                 `player_id` INT,
@@ -80,61 +77,68 @@ class LockAndChain extends Table
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
                 FOREIGN KEY (`card_id`) REFERENCES `Cards`(`id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8;"
+    ];
 
-        ];
-
-        foreach ($sqlStatements as $sql) {
-          self::DbQuery($sql);
-        }
-
-        // Initialize players
-        $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar) VALUES ";
-        $values = array();
-        foreach ($players as $player_id => $player) {
-          $color = $this->getPlayerColor($player_id);
-          $values[] = "($player_id, '" . addslashes($player['player_name']) . "', '$color', '', '')";
-        }
-        $sql .= implode(',', $values);
-        self::DbQuery($sql);
-
-        // Initialize decks and cards
-        $this->initDecks();
-
-        // Set up game state
-        $this->setGameStateInitialValue('currentTurn', 0);
-
-        $this->activeNextPlayer();
-
-        self::DbQuery("COMMIT");
-        break; // If successful, break out of the retry loop
-      } catch (Exception $e) {
-        self::DbQuery("ROLLBACK");
-        if ($retry == $maxRetries - 1) {
-          throw $e; // Rethrow the exception if the max retries are reached
-        }
-      }
+    // Execute each query
+    foreach ($queries as $query) {
+      self::DbQuery($query);
     }
+
+    // Setup other game elements
+    // Initialize players
+    $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar) VALUES ";
+    $values = array();
+    foreach ($players as $player_id => $player) {
+      $color = $this->getPlayerColor($player_id);
+      $values[] = "($player_id, '" . addslashes($player['player_name']) . "', '$color', '', '')";
+    }
+    $sql .= implode(',', $values);
+    self::DbQuery($sql);
+
+    // Initialize decks and cards
+    $this->initDecks();
+
+    // Set up game state
+    $this->setGameStateInitialValue('currentTurn', 0);
+
+    $this->activeNextPlayer();
   }
 
+  // Initialize decks
   private function initDecks()
   {
-    $colors = array("red", "blue", "green", "yellow");
-    foreach ($colors as $color) {
-      for ($number = 1; $number <= 36; $number++) {
-        $sql = "INSERT INTO Cards (number, color) VALUES ($number, '$color')";
-        self::DbQuery($sql);
+    // Each player gets a deck of cards 1-36
+    $cards = array();
+    for ($i = 1; $i <= 36; $i++) {
+      foreach ($this->getPlayers() as $player_id => $player) {
+        $cards[] = array('type' => 'card', 'type_arg' => $i, 'location' => 'deck', 'location_arg' => $player_id);
       }
     }
+    $this->cards->createCards($cards, 'deck');
+    $this->cards->shuffle('deck');
   }
 
+  // Fetch player cards
+  public function getPlayerCards($player_id)
+  {
+    $sql = "SELECT c.id, c.number, c.color FROM Cards c JOIN PlayerHands ph ON c.id = ph.card_id WHERE ph.player_id = $player_id";
+    return self::getCollectionFromDb($sql);
+  }
+
+  // Handle player actions
   public function playCard($card_id, $cell_id)
   {
     $player_id = self::getActivePlayerId();
 
-    $card = self::getObjectFromDB("SELECT * FROM Cards WHERE id = $card_id");
-    $card_value = $card['number'];
-    $card_color = $card['color'];
+    // Fetch the card details using card_id
+    $card = $this->cards->getCard($card_id);
+    $card_value = $card['type_arg'];
+    $card_color = $card['color']; // Assuming there is a color field in your card definition
 
+    // Validate the move and update the game state
+    // (e.g., check if the card can be played, update game state)
+
+    // Notify players
     self::notifyAllPlayers(
       'playCard',
       clienttranslate('${player_name} plays ${card_value} on cell ${cell_id}'),
@@ -146,16 +150,12 @@ class LockAndChain extends Table
       )
     );
 
+    // Check for chains and locks
     $this->checkChainsAndLocks($player_id, $card_id, $cell_id);
 
+    // Move to the next state
     $this->gamestate->nextState('playCard');
   }
-
-  private function checkChainsAndLocks($player_id, $card_id, $cell_id)
-  {
-    // Implement your logic to check for chains and locks
-  }
-
   function getAllDatas()
   {
     $result = array();
@@ -165,30 +165,4 @@ class LockAndChain extends Table
     $result['cardPlacements'] = self::getObjectListFromDB("SELECT * FROM CardPlacements");
     return $result;
   }
-
-  function getGameProgression()
-  {
-    return 0;
-  }
-
-  private function getPlayerColor($player_id)
-  {
-    $colors = array("ff0000", "008000", "0000ff", "ffa500", "773300");
-    return $colors[$player_id % count($colors)];
-  }
-
-  // Handle zombie player turns
-  public function zombieTurn($state, $active_player)
-  {
-    $statename = $state['name'];
-
-    if ($statename == 'playerTurn') {
-      // Skip the zombie player's turn
-      $this->gamestate->nextState('zombiePass');
-    } else {
-      // Default action: pass
-      $this->gamestate->nextState('zombiePass');
-    }
-  }
-
 }
