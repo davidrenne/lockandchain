@@ -16,43 +16,32 @@ class view_lockandchain_lockandchain extends game_view
     $players = $this->game->loadPlayersBasicInfos();
     $template = self::getGameName() . "_" . self::getGameName();
 
-    // Ensure PLAYER_PANEL is initialized
-    if (!isset($this->tpl['PLAYER_PANEL'])) {
-      $this->tpl['PLAYER_PANEL'] = '';
+    // Sample code to place player panels
+    foreach ($players as $player_id => $info) {
+      $this->tpl['PLAYER_PANEL'] .= self::_(
+        "{$template}_player_panel.tpl",
+        array(
+          'PLAYER_ID' => $player_id,
+          'PLAYER_NAME' => $info['player_name']
+        )
+      );
     }
 
-    // Begin block for player cards in hand
     $this->page->begin_block($template, "player_card");
 
-    // Sample code to place player cards
-    foreach ($players as $player_id => $info) {
-      // Assume $viewArgs contains player card data in a structure like $viewArgs['playerHands'][$player_id]
-      $cards = isset($viewArgs['playerHands'][$player_id]) ? $viewArgs['playerHands'][$player_id] : [];
-      foreach ($cards as $card) {
+    foreach ($players as $player_id => $player) {
+      $playerCards = $this->game->getPlayerCards($player_id);
+      foreach ($playerCards as $card) {
         $this->page->insert_block(
           "player_card",
           array(
-            'CARD_ID' => $card['id'],
-            'CARD_COLOR' => $card['color'],
-            'CARD_NUMBER' => $card['number']
+            "CARD_ID" => $card['id'],
+            "CARD_COLOR" => $card['color'],
+            "CARD_NUMBER" => $card['number']
           )
         );
       }
     }
-
-    // Ensure PLAYER_BOARD is initialized
-    if (!isset($this->tpl['PLAYER_BOARD'])) {
-      $this->tpl['PLAYER_BOARD'] = '';
-    }
-
-    // Adding the player boards to the main container
-    foreach ($players as $player_id => $info) {
-      $this->tpl['PLAYER_BOARD'] .= '<div id="player_board_' . $player_id . '" class="player_board"></div>';
-    }
-
-    // Insert player boards
-    $this->page->insert_block("player_board", array());
   }
 }
-
 ?>
