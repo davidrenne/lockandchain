@@ -15,11 +15,9 @@ class LockAndChain extends Table
 
   protected function getGameName()
   {
-    // Used for translations and stuff. Please do not modify.
     return "lockandchain";
   }
 
-  // Setup new game
   protected function setupNewGame($players, $options = array())
   {
     // SQL queries for creating necessary tables
@@ -99,35 +97,30 @@ class LockAndChain extends Table
     $this->activeNextPlayer();
   }
 
-  // Initialize decks
   private function initDecks()
   {
-    // Each player gets a deck of cards 1-36
     $cards = array();
-    for ($i = 1; $i <= 36; $i++) {
-      foreach (self::loadPlayersBasicInfos() as $player_id => $player) {
-        $cards[] = array('type' => 'card', 'type_arg' => $i, 'location' => 'deck', 'location_arg' => $player_id);
+    $colors = array("red", "blue", "green", "yellow");
+    foreach ($colors as $color) {
+      for ($number = 1; $number <= 36; $number++) {
+        $cards[] = array('number' => $number, 'color' => $color);
       }
     }
-    self::DbQuery("INSERT INTO Cards (number, color) VALUES " . implode(',', array_map(function ($card) {
-      return "({$card['type_arg']}, 'color')";
-    }, $cards)));
+
+    foreach ($cards as $card) {
+      $sql = "INSERT INTO Cards (number, color) VALUES ({$card['number']}, '{$card['color']}')";
+      self::DbQuery($sql);
+    }
   }
 
-  // Handle player actions
   public function playCard($card_id, $cell_id)
   {
     $player_id = self::getActivePlayerId();
 
-    // Fetch the card details using card_id
     $card = self::getObjectFromDB("SELECT * FROM Cards WHERE id = $card_id");
     $card_value = $card['number'];
-    $card_color = $card['color']; // Assuming there is a color field in your card definition
+    $card_color = $card['color'];
 
-    // Validate the move and update the game state
-    // (e.g., check if the card can be played, update game state)
-
-    // Notify players
     self::notifyAllPlayers(
       'playCard',
       clienttranslate('${player_name} plays ${card_value} on cell ${cell_id}'),
@@ -139,50 +132,34 @@ class LockAndChain extends Table
       )
     );
 
-    // Check for chains and locks
     $this->checkChainsAndLocks($player_id, $card_id, $cell_id);
 
-    // Move to the next state
     $this->gamestate->nextState('playCard');
   }
 
-  // Check chains and locks (dummy implementation, needs actual logic)
   private function checkChainsAndLocks($player_id, $card_id, $cell_id)
   {
     // Implement your logic to check for chains and locks
   }
 
-  // Get all data to initialize the client-side game state
   function getAllDatas()
   {
     $result = array();
-
-    // Get basic player info
     $result['players'] = $this->loadPlayersBasicInfos();
-
-    // Get cards data
     $result['cards'] = self::getObjectListFromDB("SELECT * FROM Cards");
-
-    // Get player hands data
     $result['playerHands'] = self::getObjectListFromDB("SELECT * FROM PlayerHands");
-
-    // Get card placements data
     $result['cardPlacements'] = self::getObjectListFromDB("SELECT * FROM CardPlacements");
-
     return $result;
   }
 
-  // Get the progression of the game
   function getGameProgression()
   {
-    // Implement a way to calculate the game's progression.
     return 0;
   }
 
-  // Get player color
   private function getPlayerColor($player_id)
   {
-    $colors = array("ff0000", "008000", "0000ff", "ffa500", "773300"); // Add or modify colors as needed
+    $colors = array("ff0000", "008000", "0000ff", "ffa500", "773300");
     return $colors[$player_id % count($colors)];
   }
 }
