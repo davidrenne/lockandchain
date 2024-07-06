@@ -109,25 +109,39 @@ class LockAndChain extends Table
     $this->activeNextPlayer();
   }
 
+  public function getPlayerCards($player_id)
+  {
+    // Fetch the cards for a specific player
+    $sql = "SELECT * FROM `PlayerHands` WHERE `player_id` = $player_id";
+    return self::getCollectionFromDb($sql);
+  }
+
   // Initialize decks 
   private function initDecks()
   {
+    // Each player gets a deck of cards 1-36
     $cards = array();
+    $players = $this->loadPlayersBasicInfos(); // Use loadPlayersBasicInfos() instead of getPlayers()
     for ($i = 1; $i <= 36; $i++) {
-      foreach ($this->getPlayers() as $player_id => $player) {
-        $cards[] = array('type' => 'card', 'type_arg' => $i, 'location' => 'deck', 'location_arg' => $player_id);
+      foreach ($players as $player_id => $player) {
+        $cards[] = array(
+          'card_type' => 'card',
+          'card_type_arg' => $i,
+          'card_location' => 'deck',
+          'card_location_arg' => $player_id
+        );
       }
     }
 
-    // Insert cards into the database
+    // Insert cards into Cards table
     foreach ($cards as $card) {
-      $sql = "INSERT INTO Cards (card_type, card_type_arg, card_location, card_location_arg) VALUES ('card', {$card['type_arg']}, 'deck', {$card['location_arg']})";
+      $sql = "INSERT INTO Cards (card_type, card_type_arg, card_location, card_location_arg) 
+                VALUES ('{$card['card_type']}', {$card['card_type_arg']}, '{$card['card_location']}', {$card['card_location_arg']})";
       self::DbQuery($sql);
     }
 
     // Shuffle the deck
     $this->shuffleDeck();
-
   }
 
   private function shuffleDeck()
@@ -173,10 +187,19 @@ class LockAndChain extends Table
     $result = array();
     $result['players'] = $this->loadPlayersBasicInfos();
     $result['cards'] = self::getObjectListFromDB("SELECT * FROM Cards");
-    $result['playerHands'] = self::getObjectListFromDB("SELECT * FROM PlayerHands");
+
+    // Fetch player hands
+    $result['playerHands'] = array();
+    $players = $this->loadPlayersBasicInfos();
+    foreach ($players as $player_id => $player) {
+      $result['playerHands'][$player_id] = self::getObjectListFromDB("SELECT c.* FROM Cards c JOIN PlayerHands ph ON c.card_id = ph.card_id WHERE ph.player_id = $player_id");
+    }
+
     $result['cardPlacements'] = self::getObjectListFromDB("SELECT * FROM CardPlacements");
     return $result;
   }
+
+
 
 
   // Define the missing getPlayerColor method

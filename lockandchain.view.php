@@ -25,22 +25,5 @@ class view_lockandchain_lockandchain extends game_view
         )
       );
     }
-
-    // Define the blocks for player cards
-    $this->page->begin_block($template, "player_card");
-
-    foreach ($players as $player_id => $player) {
-      $playerCards = $this->game->getPlayerCards($player_id);
-      foreach ($playerCards as $card) {
-        $this->page->insert_block(
-          "player_card",
-          array(
-            "CARD_ID" => $card['id'],
-            "CARD_COLOR" => $card['color'],
-            "CARD_NUMBER" => $card['number']
-          )
-        );
-      }
-    }
   }
 }

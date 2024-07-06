@@ -3,20 +3,23 @@ define([
   "dojo/_base/declare",
   "ebg/core/gamegui",
   "ebg/counter",
+  "dojo/string",
 ], function (dojo, declare) {
   return declare("bgagame.lockandchain", ebg.core.gamegui, {
     constructor: function () {
       console.log("lockandchain constructor");
 
       // Define the player hand template
-      this.jstpl_player_hand =
-        '<div class="player-hand" id="player-hand-${player_id}">${cards}</div>';
+      this.jstpl_player_hand = dojo.string.substitute(
+        '<div class="player-hand" id="player-hand-${player_id}">${cards}</div>',
+        { player_id: "", cards: "" }
+      );
 
       // Define the player card template
-      this.jstpl_player_card =
-        '<div class="player_card" id="player_card_${CARD_ID}">' +
-        '<img src="img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" />' +
-        "</div>";
+      this.jstpl_player_card = dojo.string.substitute(
+        '<div class="player_card" id="player_card_${CARD_ID}"><img src="img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" /></div>',
+        { CARD_ID: "", CARD_COLOR: "", CARD_NUMBER: "" }
+      );
 
       console.log(
         "Templates defined:",
@@ -35,20 +38,19 @@ define([
         // Setup player hand
         var cards_html = "";
         if (gamedatas.playerHands && gamedatas.playerHands[player_id]) {
-          for (var i in gamedatas.playerHands[player_id]) {
-            var card = gamedatas.playerHands[player_id][i];
-            cards_html += this.format_block(this.jstpl_player_card, {
-              CARD_ID: card.id,
-              CARD_COLOR: card.color,
-              CARD_NUMBER: card.number,
+          gamedatas.playerHands[player_id].forEach((card) => {
+            cards_html += dojo.string.substitute(this.jstpl_player_card, {
+              CARD_ID: card.card_id,
+              CARD_COLOR: card.card_type,
+              CARD_NUMBER: card.card_type_arg,
             });
-          }
+          });
         }
 
         console.log("Player hand HTML for player", player_id, cards_html);
 
         dojo.place(
-          this.format_block(this.jstpl_player_hand, {
+          dojo.string.substitute(this.jstpl_player_hand, {
             player_id: player_id,
             cards: cards_html,
           }),
