@@ -16,7 +16,7 @@ class LockAndChain extends Table
 
     // Initialize the cards deck module
     $this->cards = self::getNew("module.common.deck");
-    $this->cards->init("card"); // Initialize the deck with the card table
+    $this->cards->init("Cards"); // Initialize the deck with the card table
   }
 
   protected function getGameName()
@@ -42,7 +42,7 @@ class LockAndChain extends Table
     self::DbQuery("
             CREATE TABLE IF NOT EXISTS `PlayerHands` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `player_id` INT,
+                `player_id` INT(10) UNSIGNED,
                 `card_id` INT,
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
                 FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`)
@@ -54,9 +54,8 @@ class LockAndChain extends Table
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `game_id` INT,
                 `card_id` INT,
-                `player_id` INT,
+                `player_id` INT(10) UNSIGNED,
                 `position` INT,
-                FOREIGN KEY (`game_id`) REFERENCES `global`(`global_id`),
                 FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`),
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -65,7 +64,7 @@ class LockAndChain extends Table
     self::DbQuery("
             CREATE TABLE IF NOT EXISTS `Chains` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `player_id` INT,
+                `player_id` INT(10) UNSIGNED,
                 `start_position` INT,
                 `end_position` INT,
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
@@ -75,7 +74,7 @@ class LockAndChain extends Table
     self::DbQuery("
             CREATE TABLE IF NOT EXISTS `Locks` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `player_id` INT,
+                `player_id` INT(10) UNSIGNED,
                 `start_position` INT,
                 `end_position` INT,
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
@@ -86,11 +85,10 @@ class LockAndChain extends Table
             CREATE TABLE IF NOT EXISTS `GameActions` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `game_id` INT,
-                `player_id` INT,
+                `player_id` INT(10) UNSIGNED,
                 `action_type` VARCHAR(50),
                 `card_id` INT,
                 `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (`game_id`) REFERENCES `global`(`global_id`),
                 FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
                 FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
