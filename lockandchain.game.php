@@ -1,4 +1,5 @@
 <?php
+require_once (APP_GAMEMODULE_PATH . 'module/table/table.game.php');
 
 class LockAndChain extends Table
 {
@@ -20,96 +21,97 @@ class LockAndChain extends Table
 
   protected function setupNewGame($players, $options = array())
   {
-    // SQL queries for creating necessary tables
-    $sql = "
-        CREATE TABLE IF NOT EXISTS `Cards` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `number` INT NOT NULL,
-            `color` VARCHAR(7) NOT NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+    $maxRetries = 3;
+    for ($retry = 0; $retry < $maxRetries; $retry++) {
+      try {
+        self::DbQuery("START TRANSACTION");
 
-        CREATE TABLE IF NOT EXISTS `PlayerHands` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `player_id` INT,
-            `card_id` INT,
-            FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
-            FOREIGN KEY (`card_id`) REFERENCES `Cards`(`id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+        // SQL queries for creating necessary tables without foreign key constraints
+        $sql = "
+            CREATE TABLE IF NOT EXISTS `Cards` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `number` INT NOT NULL,
+                `color` VARCHAR(7) NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-        CREATE TABLE IF NOT EXISTS `CardPlacements` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `game_id` INT,
-            `card_id` INT,
-            `player_id` INT,
-            `position` INT,
-            FOREIGN KEY (`game_id`) REFERENCES `global`(`global_id`),
-            FOREIGN KEY (`card_id`) REFERENCES `Cards`(`id`),
-            FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+            CREATE TABLE IF NOT EXISTS `PlayerHands` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `player_id` INT,
+                `card_id` INT
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-        CREATE TABLE IF NOT EXISTS `Chains` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `player_id` INT,
-            `start_position` INT,
-            `end_position` INT,
-            FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+            CREATE TABLE IF NOT EXISTS `CardPlacements` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `game_id` INT,
+                `card_id` INT,
+                `player_id` INT,
+                `position` INT
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-        CREATE TABLE IF NOT EXISTS `Locks` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `player_id` INT,
-            `start_position` INT,
-            `end_position` INT,
-            FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+            CREATE TABLE IF NOT EXISTS `Chains` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `player_id` INT,
+                `start_position` INT,
+                `end_position` INT
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-        CREATE TABLE IF NOT EXISTS `GameActions` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `game_id` INT,
-            `player_id` INT,
-            `action_type` VARCHAR(50),
-            `card_id` INT,
-            `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (`game_id`) REFERENCES `global`(`global_id`),
-            FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
-            FOREIGN KEY (`card_id`) REFERENCES `Cards`(`id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-        ";
+            CREATE TABLE IF NOT EXISTS `Locks` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `player_id` INT,
+                `start_position` INT,
+                `end_position` INT
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-    self::DbQuery($sql);
+            CREATE TABLE IF NOT EXISTS `GameActions` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `game_id` INT,
+                `player_id` INT,
+                `action_type` VARCHAR(50),
+                `card_id` INT,
+                `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+            ";
 
-    // Initialize players
-    $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar) VALUES ";
-    $values = array();
-    foreach ($players as $player_id => $player) {
-      $color = $this->getPlayerColor($player_id);
-      $values[] = "($player_id, '" . addslashes($player['player_name']) . "', '$color', '', '')";
+        self::DbQuery($sql);
+
+        // Initialize players
+        $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar) VALUES ";
+        $values = array();
+        foreach ($players as $player_id => $player) {
+          $color = $this->getPlayerColor($player_id);
+          $values[] = "($player_id, '" . addslashes($player['player_name']) . "', '$color', '', '')";
+        }
+        $sql .= implode(',', $values);
+        self::DbQuery($sql);
+
+        // Initialize decks and cards
+        $this->initDecks();
+
+        // Set up game state
+        $this->setGameStateInitialValue('currentTurn', 0);
+
+        $this->activeNextPlayer();
+
+        self::DbQuery("COMMIT");
+        break; // If successful, break out of the retry loop
+      } catch (Exception $e) {
+        self::DbQuery("ROLLBACK");
+        if ($retry == $maxRetries - 1) {
+          throw $e; // Rethrow the exception if the max retries are reached
+        }
+      }
     }
-    $sql .= implode(',', $values);
-    self::DbQuery($sql);
-
-    // Initialize decks and cards
-    $this->initDecks();
-
-    // Set up game state
-    $this->setGameStateInitialValue('currentTurn', 0);
-
-    $this->activeNextPlayer();
   }
+
 
   private function initDecks()
   {
-    $cards = array();
     $colors = array("red", "blue", "green", "yellow");
     foreach ($colors as $color) {
       for ($number = 1; $number <= 36; $number++) {
-        $cards[] = array('number' => $number, 'color' => $color);
+        $sql = "INSERT INTO Cards (number, color) VALUES ($number, '$color')";
+        self::DbQuery($sql);
       }
-    }
-
-    foreach ($cards as $card) {
-      $sql = "INSERT INTO Cards (number, color) VALUES ({$card['number']}, '{$card['color']}')";
-      self::DbQuery($sql);
     }
   }
 
