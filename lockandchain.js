@@ -1,3 +1,9 @@
+// At the top of your lockandchain.js file, outside of the define block:
+var jstpl_player_hand =
+  '<div class="player-hand" id="player-hand-${player_id}">${cards}</div>';
+var jstpl_player_card =
+  '<div class="player_card" id="player_card_${CARD_ID}" draggable="true"><img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" /></div>';
+
 define([
   "dojo",
   "dojo/_base/declare",
@@ -8,92 +14,54 @@ define([
   return declare("bgagame.lockandchain", ebg.core.gamegui, {
     constructor: function () {
       console.log("lockandchain constructor");
-
-      // Define the player hand template
-      this.jstpl_player_hand = dojo.string.substitute(
-        '<div class="player-hand" id="player-hand-${player_id}">${cards}</div>',
-        { player_id: "", cards: "" }
-      );
-
-      // Define the player card template
-      this.jstpl_player_card = dojo.string.substitute(
-        '<div class="player_card" id="player_card_${CARD_ID}" draggable="true"><img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" /></div>',
-        { CARD_ID: "", CARD_COLOR: "", CARD_NUMBER: "" }
-      );
-
-      console.log(
-        "Templates defined:",
-        this.jstpl_player_hand,
-        this.jstpl_player_card
-      );
     },
 
     setup: function (gamedatas) {
       console.log("Starting game setup");
 
-      // Setting up player boards and hands
-      for (var player_id in gamedatas.players) {
-        var player = gamedatas.players[player_id];
-
-        // Create player hand container if it doesn't exist
-        if (!dojo.byId("player-hand-" + player_id)) {
-          dojo.place(
-            this.format_block("jstpl_player_hand", {
-              player_id: player_id,
-            }),
-            "player_board_" + player_id
-          );
+      // Setup the board
+      for (let i = 1; i <= 36; i++) {
+        let cellId = i.toString().padStart(3, "0");
+        let cell = dojo.byId(`cell_${cellId}`);
+        if (cell) {
+          // Add any necessary setup for board cells
         }
-
-        // Setup player hand
-        if (gamedatas.playerHands && gamedatas.playerHands[player_id]) {
-          gamedatas.playerHands[player_id].forEach((card) => {
-            dojo.place(
-              this.format_block("jstpl_player_card", {
-                CARD_ID: card.card_id,
-                CARD_COLOR: card.card_type,
-                CARD_NUMBER: card.card_type_arg.toString().padStart(2, "0"),
-              }),
-              "player-hand-" + player_id
-            );
-          });
-        }
-
-        // Make all cards selectable
-        this.makeCardsSelectable(player_id);
       }
 
-      // Add confirm button
-      this.addConfirmButton();
+      // Setup only the current player's hand
+      let currentPlayerId = gamedatas.current_player_id;
+      let playerHand = dojo.byId(`player_hand_${currentPlayerId}`);
+      if (playerHand && gamedatas.playerHand) {
+        this.makeCardsSelectable(currentPlayerId);
+      }
+
+      // Add confirm button only for the current player
+      this.addConfirmButton(currentPlayerId);
 
       this.setupNotifications();
 
       console.log("Ending game setup");
     },
 
-    makeCardsSelectable: function (player_id) {
-      dojo.query("#player-hand-" + player_id + " .player_card").forEach(
+    makeCardsSelectable: function (playerId) {
+      dojo.query(`#player_hand_${playerId} .player_card`).forEach(
         dojo.hitch(this, function (card) {
           dojo.connect(card, "onclick", this, "onCardSelect");
         })
       );
     },
 
-    addConfirmButton: function () {
-      // Add a confirm button to each player's board
-      for (var player_id in this.gamedatas.players) {
+    addConfirmButton: function (playerId) {
+      let playerBoard = dojo.byId(`player_board_${playerId}`);
+      if (playerBoard) {
         dojo.place(
-          '<button id="confirm-button-' +
-            player_id +
-            '" class="confirm-button">Confirm Selection</button>',
-          "player_board_" + player_id
+          `<button id="confirm-button-${playerId}" class="confirm-button">Confirm Selection</button>`,
+          playerBoard
         );
-        dojo.connect(
-          $("confirm-button-" + player_id),
-          "onclick",
-          this,
-          "onConfirmSelection"
-        );
+        let confirmButton = dojo.byId(`confirm-button-${playerId}`);
+        if (confirmButton) {
+          dojo.connect(confirmButton, "onclick", this, "onConfirmSelection");
+        }
       }
     },
 

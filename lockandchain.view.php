@@ -7,12 +7,10 @@ class view_lockandchain_lockandchain extends game_view
   {
     return "lockandchain";
   }
+
   function build_page($viewArgs)
   {
-    error_log("Starting build_page method");
-    // Extract the template content
     $this->tpl['PAGE_NAME'] = 'lockandchain_lockandchain';
-    error_log("Template name: " . $this->tpl['PAGE_NAME']);
 
     // Generate the board
     $this->page->begin_block($this->tpl['PAGE_NAME'], "board");
@@ -25,30 +23,27 @@ class view_lockandchain_lockandchain extends game_view
       );
     }
 
-    // Generate player hands
-    $players = $this->game->loadPlayersBasicInfos();
+    // Generate only the current player's hand
+    $current_player_id = $this->game->getAllDatas()['current_player_id'];
+    $player = $this->game->loadPlayersBasicInfos()[$current_player_id];
+    $cards = $this->game->getPlayerCards($current_player_id);
+
     $this->page->begin_block($this->tpl['PAGE_NAME'], "player_hand");
-    foreach ($players as $player_id => $player) {
-      $cards = $this->game->getPlayerCards($player_id);
-      $player_cards = '';
-      foreach ($cards as $card) {
-        $player_cards .= $this->format_block(
-          "player_card",
-          array(
-            'CARD_ID' => $card['card_id'],
-            'CARD_COLOR' => $card['card_type'],
-            'CARD_NUMBER' => str_pad($card['card_type_arg'], 2, '0', STR_PAD_LEFT)
-          )
-        );
-      }
-      $this->page->insert_block(
-        "player_hand",
-        array(
-          'PLAYER_ID' => $player_id,
-          'PLAYER_NAME' => $player['player_name'],
-          'PLAYER_CARDS' => $player_cards
-        )
-      );
+    $player_cards = '';
+    foreach ($cards as $card) {
+      $player_cards .= $this->page->insert_block("player_card", array(
+        'CARD_ID' => $card['card_id'],
+        'CARD_COLOR' => $card['card_type'],
+        'CARD_NUMBER' => str_pad($card['card_type_arg'], 2, '0', STR_PAD_LEFT)
+      ), true);
     }
+    $this->page->insert_block(
+      "player_hand",
+      array(
+        'PLAYER_ID' => $current_player_id,
+        'PLAYER_NAME' => $player['player_name'],
+        'PLAYER_CARDS' => $player_cards
+      )
+    );
   }
 }
