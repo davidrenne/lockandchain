@@ -310,68 +310,80 @@ class LockAndChain extends Table
     }
   }
 
-  private function validateCardPlay($player_id, $card_id, $cell_id)
+  public function selectCard()
   {
-    // Check if the card belongs to the player
-    $card = self::getObjectFromDB("SELECT * FROM PlayerHands WHERE card_id = $card_id AND player_id = $player_id");
+    self::setAjaxMode();
+
+    // Retrieve the card_id from the AJAX call
+    $card_id = self::getArg("card_id", AT_posint, true);
+
+    // Get the current player's ID
+    $player_id = self::getCurrentPlayerId();
+
+    // Validate that the card belongs to the player
+    $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id AND card_location = 'hand' AND card_location_arg = $player_id");
     if (!$card) {
       throw new BgaUserException(self::_("You don't have this card in your hand"));
     }
 
-    // Check if the cell is empty
-    $existing_card = self::getObjectFromDB("SELECT * FROM CardPlacements WHERE position = $cell_id");
-    if ($existing_card) {
-      throw new BgaUserException(self::_("This cell is already occupied"));
+    // Check if the player has already made a selection
+    $existing_selection = self::getUniqueValueFromDB("SELECT card_id FROM PlayerSelections WHERE player_id = $player_id");
+    if ($existing_selection) {
+      // If there's an existing selection, remove it
+      self::DbQuery("DELETE FROM PlayerSelections WHERE player_id = $player_id");
     }
 
-    // Check for chains and locks
-    $chains = self::getObjectListFromDB("SELECT * FROM Chains WHERE player_id != $player_id");
-    $locks = self::getObjectListFromDB("SELECT * FROM Locks");
+    // Record the player's selection
+    self::DbQuery("INSERT INTO PlayerSelections (player_id, card_id) VALUES ($player_id, $card_id)");
 
-    foreach ($chains as $chain) {
-      if ($cell_id > $chain['start_position'] && $cell_id < $chain['end_position']) {
-        throw new BgaUserException(self::_("You cannot play within another player's chain"));
-      }
+    // Notify all players about the selection (without revealing the card)
+    self::notifyAllPlayers(
+      'cardSelected',
+      clienttranslate('${player_name} has selected a card'),
+      array(
+        'player_id' => $player_id,
+        'player_name' => self::getActivePlayerName(),
+      )
+    );
+
+    // Check if all players have made their selections
+    $players_count = self::getPlayersNumber();
+    $selections_count = self::getUniqueValueFromDB("SELECT COUNT(*) FROM PlayerSelections");
+
+    if ($selections_count == $players_count) {
+      // All players have made their selections, move to the resolution phase
+      $this->gamestate->nextState('resolveSelections');
     }
 
-    foreach ($locks as $lock) {
-      if ($cell_id >= $lock['start_position'] && $cell_id <= $lock['end_position']) {
-        throw new BgaUserException(self::_("You cannot play on a locked position"));
-      }
-    }
+    self::ajaxResponse();
   }
 
-  private function checkChainsAndLocks($player_id, $card_id, $cell_id, $lock)
+  public function resolveSelections()
   {
-    $player_cards = self::getObjectListFromDB("SELECT * FROM CardPlacements WHERE player_id = $player_id ORDER BY position");
+    // Retrieve all player selections
+    $selections = self::getCollectionFromDB("SELECT player_id, card_id FROM PlayerSelections");
 
-    // Check for chains
-    for ($i = 0; $i < count($player_cards) - 1; $i++) {
-      if ($player_cards[$i + 1]['position'] - $player_cards[$i]['position'] > 1) {
-        self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, {$player_cards[$i]['position']}, {$player_cards[$i + 1]['position']})");
-      }
+    // Prepare the data for client-side resolution
+    $selection_data = array();
+    foreach ($selections as $player_id => $selection) {
+      $card = self::getObjectFromDB("SELECT card_id, card_type AS card_color, card_type_arg AS card_number FROM Cards WHERE card_id = {$selection['card_id']}");
+      $selection_data[$player_id] = $card;
     }
 
-    // Check for locks
-    if ($lock) {
-      $consecutive_cards = 1;
-      $start_position = $cell_id;
-      $end_position = $cell_id;
+    // Notify all players about the selections and trigger client-side resolution
+    self::notifyAllPlayers(
+      'resolveSelections',
+      '',
+      array(
+        'selections' => $selection_data
+      )
+    );
 
-      foreach ($player_cards as $card) {
-        if ($card['position'] == $cell_id - 1) {
-          $consecutive_cards++;
-          $start_position = $card['position'];
-        } elseif ($card['position'] == $cell_id + 1) {
-          $consecutive_cards++;
-          $end_position = $card['position'];
-        }
-      }
+    // Clear the selections table for the next round
+    self::DbQuery("DELETE FROM PlayerSelections");
 
-      if ($consecutive_cards >= 3) {
-        self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $start_position, $end_position)");
-      }
-    }
+    // Move to the next game state (you might want to wait for client-side resolution to complete)
+    $this->gamestate->nextState('nextRound');
   }
 
   private function checkEndGame()

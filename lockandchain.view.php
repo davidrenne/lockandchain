@@ -7,7 +7,6 @@ class view_lockandchain_lockandchain extends game_view
   {
     return "lockandchain";
   }
-
   function build_page($viewArgs)
   {
     error_log("Starting build_page method");
@@ -28,26 +27,28 @@ class view_lockandchain_lockandchain extends game_view
 
     // Generate player hands
     $players = $this->game->loadPlayersBasicInfos();
+    $this->page->begin_block($this->tpl['PAGE_NAME'], "player_hand");
     foreach ($players as $player_id => $player) {
-      $this->page->begin_block($this->tpl['PAGE_NAME'], "player_hand");
+      $cards = $this->game->getPlayerCards($player_id);
+      $player_cards = '';
+      foreach ($cards as $card) {
+        $player_cards .= $this->format_block(
+          "player_card",
+          array(
+            'CARD_ID' => $card['card_id'],
+            'CARD_COLOR' => $card['card_type'],
+            'CARD_NUMBER' => str_pad($card['card_type_arg'], 2, '0', STR_PAD_LEFT)
+          )
+        );
+      }
       $this->page->insert_block(
         "player_hand",
         array(
           'PLAYER_ID' => $player_id,
           'PLAYER_NAME' => $player['player_name'],
+          'PLAYER_CARDS' => $player_cards
         )
       );
-
-      $cards = $this->game->getPlayerCards($player_id);
-      foreach ($cards as $card) {
-        $this->page->insert_block("player_card", array(
-          'PLAYER_ID' => $player_id,
-          'CARD_ID' => $card['card_id'],
-          'CARD_COLOR' => $card['card_type'],
-          'CARD_NUMBER' => str_pad($card['card_type_arg'], 2, '0', STR_PAD_LEFT)
-        ), "player_hand");
-      }
     }
-
   }
 }
