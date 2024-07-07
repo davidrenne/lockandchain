@@ -30,8 +30,19 @@ define([
 
       // Setup only the current player's hand
       let currentPlayerId = gamedatas.current_player_id;
-      let playerHand = dojo.byId(`player_hand_${currentPlayerId}`);
+      let playerHand = $("player-hand-" + currentPlayerId);
       if (playerHand && gamedatas.playerHand) {
+        for (let i = 0; i < gamedatas.playerHand.length; i++) {
+          let card = gamedatas.playerHand[i];
+          dojo.place(
+            this.format_block("jstpl_player_card", {
+              CARD_ID: card.card_id,
+              CARD_COLOR: card.card_type,
+              CARD_NUMBER: card.card_type_arg.toString().padStart(2, "0"),
+            }),
+            playerHand
+          );
+        }
         this.makeCardsSelectable(currentPlayerId);
       }
 
