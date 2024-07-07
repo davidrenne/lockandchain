@@ -29,38 +29,46 @@ define([
     },
 
     setup: function (gamedatas) {
-      console.log("Starting game setup");
-      // Setting up player boards and hands
-      for (var player_id in gamedatas.players) {
-        var player = gamedatas.players[player_id];
+        console.log("Starting game setup");
+        
+        // Setting up player boards and hands
+        for (var player_id in gamedatas.players) {
+            var player = gamedatas.players[player_id];
+            
+            // Create player hand container if it doesn't exist
+            if (!dojo.byId('player-hand-' + player_id)) {
+                dojo.place(this.format_block('jstpl_player_hand', {
+                    player_id: player_id
+                }), 'player_board_' + player_id);
+            }
 
-        // Setup player hand
-        if (gamedatas.playerHands && gamedatas.playerHands[player_id]) {
-          gamedatas.playerHands[player_id].forEach((card) => {
-            dojo.place(
-              this.format_block("jstpl_player_card", {
-                CARD_ID: card.card_id,
-                CARD_COLOR: card.card_type,
-                CARD_NUMBER: card.card_type_arg.toString().padStart(2, "0"),
-              }),
-              "player_hand"
-            );
-          });
+            // Setup player hand
+            if (gamedatas.playerHands && gamedatas.playerHands[player_id]) {
+                gamedatas.playerHands[player_id].forEach((card) => {
+                    dojo.place(
+                        this.format_block("jstpl_player_card", {
+                            CARD_ID: card.card_id,
+                            CARD_COLOR: card.card_type,
+                            CARD_NUMBER: card.card_type_arg.toString().padStart(2, "0"),
+                        }),
+                        'player-hand-' + player_id
+                    );
+                });
+            }
         }
-      }
 
-      // Make cards in player's hand draggable
-      if (this.isCurrentPlayerActive()) {
-        this.makeCardsDraggable();
-      }
+        // Make cards in player's hand draggable
+        if (this.isCurrentPlayerActive()) {
+            this.makeCardsDraggable();
+        }
 
-      // Make board cells droppable
-      this.makeCellsDroppable();
+        // Make board cells droppable
+        this.makeCellsDroppable();
 
-      this.setupNotifications();
+        this.setupNotifications();
 
-      console.log("Ending game setup");
-    },
+        console.log("Ending game setup");
+    }
 
     makeCardsDraggable: function () {
       dojo.query("#player_hand .player_card").forEach(
@@ -82,6 +90,29 @@ define([
           dojo.connect(cell, "ondrop", this, "onCardDrop");
         })
       );
+    },
+
+    onCardDrop: function (evt) {
+        evt.preventDefault();
+        var cardId = evt.dataTransfer.getData("text").split("_")[2];
+        var cellId = evt.currentTarget.id.split("_")[2];
+        if (this.checkAction("playCard", true)) {
+            this.ajaxcall(
+                "/lockandchain/lockandchain/playCard.html",
+                {
+                    card_id: cardId,
+                    cell_id: cellId,
+                    lock: false,
+                },
+                this,
+                function (result) {},
+                function (is_error) {
+                    if (is_error) {
+                        this.showMessage(_(is_error), "error");
+                    }
+                }
+            );
+        }
     },
 
     onPlayerCardClick: function (evt) {

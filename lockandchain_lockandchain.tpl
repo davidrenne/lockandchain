@@ -12,13 +12,16 @@
         <!-- END board -->
     </div>
 
-    <div id="player_hand">
+    <!-- BEGIN player_hand -->
+    <div id="player_hand_{PLAYER_ID}" class="player_hand">
+        <h3>{PLAYER_NAME}'s Hand</h3>
         <!-- BEGIN player_card -->
         <div class="player_card" id="player_card_{CARD_ID}">
-            <img src="/lockandchain/img/lockandchainnumbers_{CARD_COLOR}_{CARD_NUMBER}.png" />
+            <img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_{CARD_COLOR}_{CARD_NUMBER}.png" />
         </div>
         <!-- END player_card -->
     </div>
+    <!-- END player_hand -->
 </div>
 
 {OVERALL_GAME_FOOTER}
