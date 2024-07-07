@@ -1,13 +1,13 @@
 define([
-    "dojo",
-    "dojo/_base/declare",
-    "ebg/core/gamegui",
-    "ebg/counter",
-    "dojo/string",
+  "dojo",
+  "dojo/_base/declare",
+  "ebg/core/gamegui",
+  "ebg/counter",
+  "dojo/string",
 ], function (dojo, declare) {
-    return declare("bgagame.lockandchain", ebg.core.gamegui, {
-        constructor: function () {
-            console.log("lockandchain constructor");
+  return declare("bgagame.lockandchain", ebg.core.gamegui, {
+    constructor: function () {
+      console.log("lockandchain constructor");
 
       // Define the player hand template
       this.jstpl_player_hand = dojo.string.substitute(
@@ -158,87 +158,91 @@ define([
     },
 
     onCardSelect: function (evt) {
-        var card = evt.currentTarget;
-        dojo.toggleClass(card, 'selected');
+      var card = evt.currentTarget;
+      dojo.toggleClass(card, "selected");
     },
 
     onConfirmSelection: function (evt) {
-        var player_id = evt.target.id.split('-')[2];
-        var selectedCard = dojo.query('#player-hand-' + player_id + ' .player_card.selected')[0];
-        
-        if (selectedCard) {
-            var card_id = selectedCard.id.split('_')[2];
-            
-            // Send the selection to the server
-            this.ajaxcall(
-                "/lockandchain/lockandchain/selectCard.html",
-                { card_id: card_id },
-                this,
-                function(result) {}
-            );
-        } else {
-            this.showMessage(_("Please select a card before confirming."), "error");
-        }
+      var player_id = evt.target.id.split("-")[2];
+      var selectedCard = dojo.query(
+        "#player-hand-" + player_id + " .player_card.selected"
+      )[0];
+
+      if (selectedCard) {
+        var card_id = selectedCard.id.split("_")[2];
+
+        // Send the selection to the server
+        this.ajaxcall(
+          "/lockandchain/lockandchain/selectCard.html",
+          { card_id: card_id },
+          this,
+          function (result) {}
+        );
+      } else {
+        this.showMessage(_("Please select a card before confirming."), "error");
+      }
     },
 
     // This method would be called when all players have made their selections
     resolveSelections: function (selections) {
-        // Display all selected cards
-        var selectionDisplay = $('selection-display');
-        if (!selectionDisplay) {
-            selectionDisplay = dojo.place('<div id="selection-display"></div>', 'game_play_area');
-        }
-        dojo.empty(selectionDisplay);
+      // Display all selected cards
+      var selectionDisplay = $("selection-display");
+      if (!selectionDisplay) {
+        selectionDisplay = dojo.place(
+          '<div id="selection-display"></div>',
+          "game_play_area"
+        );
+      }
+      dojo.empty(selectionDisplay);
 
-        // Check for duplicate selections
-        var cardCounts = {};
-        for (var player_id in selections) {
-            var card = selections[player_id];
-            if (cardCounts[card.card_number]) {
-                cardCounts[card.card_number].push(player_id);
-            } else {
-                cardCounts[card.card_number] = [player_id];
-            }
-
-            dojo.place(
-                this.format_block("jstpl_player_card", {
-                    CARD_ID: card.card_id,
-                    CARD_COLOR: card.card_type,
-                    CARD_NUMBER: card.card_number
-                }),
-                selectionDisplay
-            );
+      // Check for duplicate selections
+      var cardCounts = {};
+      for (var player_id in selections) {
+        var card = selections[player_id];
+        if (cardCounts[card.card_number]) {
+          cardCounts[card.card_number].push(player_id);
+        } else {
+          cardCounts[card.card_number] = [player_id];
         }
 
-        // Resolve duplicates and place cards
-        for (var card_number in cardCounts) {
-            if (cardCounts[card_number].length > 1) {
-                // Duplicate found, discard these cards
-                cardCounts[card_number].forEach(player_id => {
-                    this.discardCard(selections[player_id].card_id);
-                });
-            } else {
-                // No duplicate, attempt to place the card
-                var player_id = cardCounts[card_number][0];
-                var card = selections[player_id];
-                this.placeCard(card.card_id, card.card_number);
-            }
+        dojo.place(
+          this.format_block("jstpl_player_card", {
+            CARD_ID: card.card_id,
+            CARD_COLOR: card.card_type,
+            CARD_NUMBER: card.card_number,
+          }),
+          selectionDisplay
+        );
+      }
+
+      // Resolve duplicates and place cards
+      for (var card_number in cardCounts) {
+        if (cardCounts[card_number].length > 1) {
+          // Duplicate found, discard these cards
+          cardCounts[card_number].forEach((player_id) => {
+            this.discardCard(selections[player_id].card_id);
+          });
+        } else {
+          // No duplicate, attempt to place the card
+          var player_id = cardCounts[card_number][0];
+          var card = selections[player_id];
+          this.placeCard(card.card_id, card.card_number);
         }
+      }
     },
 
     discardCard: function (card_id) {
-        // Implement card discard logic
-        console.log("Discarding card: " + card_id);
-        // You would typically call a server action here to update the game state
+      // Implement card discard logic
+      console.log("Discarding card: " + card_id);
+      // You would typically call a server action here to update the game state
     },
 
     placeCard: function (card_id, card_number) {
-        // Implement card placement logic
-        console.log("Placing card: " + card_id + " on position " + card_number);
-        // You would typically call a server action here to update the game state
-        // and then update the UI based on the result
-    }
-
+      // Implement card placement logic
+      console.log("Placing card: " + card_id + " on position " + card_number);
+      // You would typically call a server action here to update the game state
+      // and then update the UI based on the result
+    },
 
     setupNotifications: function () {
       console.log("notifications subscriptions setup");
