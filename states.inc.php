@@ -20,6 +20,10 @@ if (!defined('ST_PLAYER_TURN')) {
   define('ST_PLAYER_TURN', 5);
 }
 
+if (!defined('ST_RESOLVE_SELECTIONS')) {
+  define('ST_RESOLVE_SELECTIONS', 6);
+}
+
 if (!defined('ST_END_GAME')) {
   define('ST_END_GAME', 99999);
 }
@@ -61,6 +65,35 @@ $machinestates = array(
     "type" => "activeplayer",
     "possibleactions" => array("playCard"),
     "transitions" => array("playCard" => ST_NEXT_PLAYER)
+  ),
+
+  ST_PLAYER_TURN => array(
+    "name" => "playerTurn",
+    "description" => clienttranslate('${actplayer} must select a card'),
+    "descriptionmyturn" => clienttranslate('${you} must select a card'),
+    "type" => "activeplayer",
+    "possibleactions" => array("selectCard"),
+    "transitions" => array(
+      "selectCard" => ST_PLAYER_TURN,
+      "resolveSelections" => ST_RESOLVE_SELECTIONS
+    )
+  ),
+
+  ST_RESOLVE_SELECTIONS => array(
+    "name" => "resolveSelections",
+    "description" => clienttranslate('Resolving card selections'),
+    "type" => "game",
+    "action" => "stResolveSelections",
+    "transitions" => array("" => ST_NEXT_PLAYER)
+  ),
+
+  // Define the zombie pass state
+  'zombiePass' => array(
+    'name' => 'zombiePass',
+    'description' => '',
+    'type' => 'game',
+    'action' => 'stZombiePass',
+    'transitions' => array('playerTurn' => ST_PLAYER_TURN, 'endGame' => ST_END_GAME)
   ),
 
   // Transition to next player

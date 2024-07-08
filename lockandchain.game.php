@@ -297,12 +297,9 @@ class LockAndChain extends Table
     $sql = "INSERT INTO game_logs (section, message) VALUES ('$escapedSection', '$escapedMessage')";
     self::DbQuery($sql);
   }
-  public function selectCard()
+  public function selectCard($card_id)
   {
     self::checkAction('selectCard');
-    self::setAjaxMode();
-    // Retrieve the card_id from the AJAX call
-    $card_id = self::getArg("card_id", AT_posint, true);
 
     // Get the current player's ID
     $player_id = self::getCurrentPlayerId();
@@ -340,9 +337,10 @@ class LockAndChain extends Table
     if ($selections_count == $players_count) {
       // All players have made their selections, move to the resolution phase
       $this->gamestate->nextState('resolveSelections');
+    } else {
+      // If not all players have selected, stay in the current state
+      $this->gamestate->nextState('stayHere');
     }
-
-    self::ajaxResponse();
   }
 
   public function resolveSelections()
@@ -371,6 +369,39 @@ class LockAndChain extends Table
 
     // Move to the next game state (you might want to wait for client-side resolution to complete)
     $this->gamestate->nextState('nextRound');
+  }
+
+  function stNextPlayer()
+  {
+    // Proceed to the next player
+    $player_id = self::activeNextPlayer();
+    if ($this->isGameEnd()) {
+      $this->gamestate->nextState("endGame");
+    } else {
+      $this->gamestate->nextState("nextTurn");
+    }
+  }
+
+  // Function to check if the game should end
+  function isGameEnd()
+  {
+    // Implement your logic to check if the game should end
+    // Return true if the game should end, otherwise false
+    return false;
+  }
+
+
+
+  public function zombieTurn($state, $active_player)
+  {
+    $statename = $state['name'];
+
+    if ($statename == 'playerTurn') {
+      $this->gamestate->nextState('endTurn');
+    } else {
+      // For other states, just go to the next state
+      $this->gamestate->nextState('zombiePass');
+    }
   }
 
   public function getCurrentPlayerId($bReturnNullIfNotLogged = false)

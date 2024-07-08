@@ -8,6 +8,14 @@ CREATE TABLE IF NOT EXISTS `Cards` (
     FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE IF NOT EXISTS `PlayerSelections` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `player_id` INT(10) UNSIGNED,
+  `card_id` INT NOT NULL,
+  FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
+  FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 CREATE TABLE IF NOT EXISTS `PlayerHands` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `player_id` INT(10) UNSIGNED,
