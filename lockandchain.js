@@ -1,8 +1,14 @@
 // At the top of your lockandchain.js file, outside of the define block:
 var jstpl_player_hand =
-  '<div class="player-hand" id="player-hand-${player_id}">${cards}</div>';
+  '<div id="player_hand_${PLAYER_ID}" class="player_hand">\
+    <h3>${PLAYER_NAME}\'s Hand</h3>\
+    ${PLAYER_CARDS}\
+</div>';
+
 var jstpl_player_card =
-  '<div class="player_card" id="player_card_${CARD_ID}" draggable="true"><img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" /></div>';
+  '<div class="player_card" id="player_card_${CARD_ID}">\
+    <img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" />\
+</div>';
 
 define([
   "dojo",
@@ -28,21 +34,25 @@ define([
         }
       }
 
-      // Setup only the current player's hand
+      // Setup the current player's hand
       let currentPlayerId = gamedatas.current_player_id;
-      let playerHand = $("player-hand-" + currentPlayerId);
-      if (playerHand && gamedatas.playerHand) {
+      let playerHandContainer = dojo.byId("player_hand_container");
+      if (playerHandContainer && gamedatas.playerHand) {
+        let playerCards = "";
         for (let i = 0; i < gamedatas.playerHand.length; i++) {
           let card = gamedatas.playerHand[i];
-          dojo.place(
-            this.format_block("jstpl_player_card", {
-              CARD_ID: card.card_id,
-              CARD_COLOR: card.card_type,
-              CARD_NUMBER: card.card_type_arg.toString().padStart(2, "0"),
-            }),
-            playerHand
-          );
+          playerCards += this.format_block("jstpl_player_card", {
+            CARD_ID: card.card_id,
+            CARD_COLOR: card.card_type,
+            CARD_NUMBER: card.card_type_arg.toString().padStart(2, "0"),
+          });
         }
+        let playerHandHtml = this.format_block("jstpl_player_hand", {
+          PLAYER_ID: currentPlayerId,
+          PLAYER_NAME: gamedatas.players[currentPlayerId].name,
+          PLAYER_CARDS: playerCards,
+        });
+        dojo.place(playerHandHtml, playerHandContainer);
         this.makeCardsSelectable(currentPlayerId);
       }
 
