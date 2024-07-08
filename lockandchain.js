@@ -92,24 +92,6 @@ define([
       }
     },
 
-    onCardDrop: function (evt) {
-      evt.preventDefault();
-      var cardId = evt.dataTransfer.getData("text").split("_")[2];
-      var cellId = evt.currentTarget.id.split("_")[2];
-      if (this.checkAction("playCard", true)) {
-        this.ajaxcall(
-          "/lockandchain/lockandchain/playCard.html",
-          {
-            card_id: cardId,
-            cell_id: cellId,
-            lock: true,
-          },
-          this,
-          function (result) {}
-        );
-      }
-    },
-
     onEnteringState: function (stateName, args) {
       console.log("Entering state: " + stateName);
 
@@ -153,9 +135,10 @@ define([
       if (this.checkAction("selectCard", true)) {
         if (selectedCard) {
           var cardId = selectedCard.id.split("_")[2];
+          var playerId = this.player_id; // Retrieve the player_id
           this.ajaxcall(
             "/lockandchain/lockandchain/selectCard.html",
-            { card_id: cardId },
+            { player_id: playerId, card_id: cardId },
             this,
             function (result) {}
           );

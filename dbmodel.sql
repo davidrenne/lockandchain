@@ -24,20 +24,16 @@ CREATE TABLE IF NOT EXISTS `PlayerHands` (
     FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-
-
-
-            CREATE TABLE IF NOT EXISTS `CardPlacements` (
+CREATE TABLE IF NOT EXISTS `CardPlacements` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `game_id` INT,
     `card_id` INT,
+    `card_number` INT,
     `player_id` INT(10) UNSIGNED,
     `position` INT,
     FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`),
     FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
-
 
 CREATE TABLE IF NOT EXISTS `Chains` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -46,9 +42,6 @@ CREATE TABLE IF NOT EXISTS `Chains` (
     `end_position` INT,
     FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
-
-
 
 CREATE TABLE IF NOT EXISTS `Locks` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
