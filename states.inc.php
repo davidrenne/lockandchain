@@ -12,10 +12,6 @@ if (!defined('ST_NEXT_PLAYER')) {
   define('ST_NEXT_PLAYER', 3);
 }
 
-if (!defined('ST_PLACE_CARD')) {
-  define('ST_PLACE_CARD', 4);  // Use the next available number in your sequence
-}
-
 if (!defined('ST_PLAYER_TURN')) {
   define('ST_PLAYER_TURN', 5);
 }
@@ -39,32 +35,13 @@ $machinestates = array(
     "transitions" => array("" => ST_PLAYER_TURN)
   ),
 
-  // ST_PLAYER_TURN => array(
-  //   "name" => "playerTurn",
-  //   "description" => clienttranslate('${actplayer} must play a card'),
-  //   "descriptionmyturn" => clienttranslate('${you} must play a card'),
-  //   "type" => "activeplayer",
-  //   "possibleactions" => array("playCard", "selectCard"),
-  //   "transitions" => array("playCard" => ST_NEXT_PLAYER, "selectCard" => ST_PLAYER_TURN)
-  // ),
-
-  ST_PLACE_CARD => array(
-    "name" => "placeCard",
-    "description" => clienttranslate('${actplayer} must place the selected card'),
-    "descriptionmyturn" => clienttranslate('${you} must place the selected card'),
-    "type" => "activeplayer",
-    "possibleactions" => array("playCard"),
-    "transitions" => array("playCard" => ST_NEXT_PLAYER)
-  ),
-
-
   ST_PLAYER_TURN => array(
     "name" => "playerTurn",
     "description" => clienttranslate('${actplayer} must play a card'),
     "descriptionmyturn" => clienttranslate('${you} must play a card'),
     "type" => "activeplayer",
-    "possibleactions" => array("playCard", "selectCard", "resolveSelections"),
-    "transitions" => array("playCard" => ST_NEXT_PLAYER, "selectCard" => ST_RESOLVE_SELECTIONS, "nextPlayer" => ST_NEXT_PLAYER)
+    "possibleactions" => array("selectCard", "resolveSelections"),
+    "transitions" => array("resolveSelections" => ST_RESOLVE_SELECTIONS, "nextPlayer" => ST_NEXT_PLAYER)
   ),
 
   ST_RESOLVE_SELECTIONS => array(
@@ -72,7 +49,8 @@ $machinestates = array(
     "description" => "",
     "type" => "game",
     "action" => "stResolveSelections",
-    "transitions" => array("nextPlayer" => ST_PLAYER_TURN, "endGame" => ST_END_GAME)
+    "possibleactions" => array("nextPlayer", "endGame", "playerTurn"),
+    "transitions" => array("nextPlayer" => ST_PLAYER_TURN, "playerTurn" => ST_PLAYER_TURN, "endGame" => ST_END_GAME)
   ),
 
   ST_NEXT_PLAYER => array(

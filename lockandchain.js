@@ -30,13 +30,10 @@ define([
       console.log("Starting game setup");
 
       // Setup the board
-      for (let i = 1; i <= 36; i++) {
-        let cellId = i.toString().padStart(3, "0");
-        let cell = dojo.byId(`cell_${cellId}`);
-        if (cell) {
-          // Add any necessary setup for board cells
-        }
-      }
+      // for (let i = 1; i <= 36; i++) {
+      //   let cellId = i.toString().padStart(3, "0");
+      //   let cell = dojo.byId(`cell_${cellId}`);
+      // }
 
       // Setup the current player's hand
       let currentPlayerId = gamedatas.current_player_id;
@@ -75,21 +72,6 @@ define([
           dojo.connect(card, "onclick", this, "onCardSelect");
         })
       );
-    },
-
-    onPlayerCardClick: function (evt) {
-      var cardId = evt.currentTarget.id.split("_")[2];
-      if (this.checkAction("playCard", true)) {
-        this.ajaxcall(
-          "/lockandchain/lockandchain/playCard.html",
-          {
-            card_id: cardId,
-            lock: true,
-          },
-          this,
-          function (result) {}
-        );
-      }
     },
 
     onEnteringState: function (stateName, args) {
@@ -212,6 +194,24 @@ define([
       // and then update the UI based on the result
     },
 
+    onEnteringState: function (stateName, args) {
+      console.log("Entering state: " + stateName);
+
+      switch (stateName) {
+        case "dummmy":
+          break;
+      }
+    },
+
+    onLeavingState: function (stateName) {
+      console.log("Leaving state: " + stateName);
+
+      switch (stateName) {
+        case "dummmy":
+          break;
+      }
+    },
+
     setupNotifications: function () {
       console.log("notifications subscriptions setup");
 
@@ -222,24 +222,22 @@ define([
     notif_cardPlayed: function (notif) {
       console.log("notif_cardPlayed");
       console.log(notif);
-
-      // Note: notif.args contains the arguments specified during you "notifyAllPlayers" / "notifyPlayer" PHP call
-      // Example implementation of handling the card played notification
-      var card_id = notif.args.card_id;
-      var cell_id = notif.args.cell_id;
-      var cardElement = dojo.byId("player_card_" + card_id);
-      if (cardElement) {
-        dojo.place(cardElement, "cell_" + cell_id);
-      } else {
-        dojo.place(
+      var card_number2 = notif.args.card_number2;
+      var card_number = notif.args.card_number;
+      var color = notif.args.color;
+      dojo.empty("cell_" + card_number); // Clear existing content
+      dojo.place(
+        '<div class="card_container">' +
           '<img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_' +
-            notif.args.card_color +
-            "_" +
-            notif.args.card_number +
-            '.png" />',
-          "cell_" + cell_id
-        );
-      }
+          color +
+          "_" +
+          card_number2 +
+          '.png" />' +
+          '<div class="card_placeholder"></div>' +
+          "</div>",
+        "cell_" + card_number,
+        "only"
+      );
     },
   });
 });

@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS `CardPlacements` (
     `card_id` INT,
     `card_number` INT,
     `player_id` INT(10) UNSIGNED,
-    `position` INT,
+    `position` INT NOT NULL DEFAULT 0,
     FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`),
     FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;

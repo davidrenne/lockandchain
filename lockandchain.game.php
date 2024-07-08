@@ -71,6 +71,7 @@ class LockAndChain extends Table
     // Get the selected cards for the round
     $selections = self::getCollectionFromDB("SELECT player_id, card_id FROM PlayerSelections");
 
+    $cardCountIds = [];
     $cardCounts = [];
     foreach ($selections as $player_id => $selection) {
       $card_id = $selection['card_id'];
@@ -78,8 +79,10 @@ class LockAndChain extends Table
 
       if (isset($cardCounts[$card['card_type_arg']])) {
         $cardCounts[$card['card_type_arg']][] = $player_id;
+        $cardCountIds[$card['card_type_arg']][] = $card_id;
       } else {
         $cardCounts[$card['card_type_arg']] = [$player_id];
+        $cardCountIds[$card['card_type_arg']][] = [$card_id];
       }
     }
     try {
@@ -97,25 +100,42 @@ class LockAndChain extends Table
           $card_id = $selections[$player_id]['card_id'];
           $this->playCard($card_id, $card_number);
         }
+
+        self::DbQuery("DELETE FROM PlayerHands WHERE card_id = {$selections[$player_id]['card_id']}");
       }
 
       // Clear selections for the next round
       self::DbQuery("DELETE FROM PlayerSelections");
+      $this->rebuildChainsAndLocks();
 
-      $transition = "nextTurn";
+      $players = self::loadPlayersBasicInfos();
+      foreach ($players as $player_id => $player) {
+        $cards = $this->getCards($player_id, 'deck', 1);
+        foreach ($cards as $card) {
+          $this->moveCard($card['id'], 'hand', $player_id);
+          self::DbQuery("INSERT INTO PlayerHands (card_type_arg, player_id, card_id) VALUES ({$card['type']}, $player_id, {$card['id']})");
+        }
+      }
+      $transition = "nextPlayer";
       if ($this->isGameEnd()) {
         $transition = "endGame";
       }
 
-
       foreach ($cardCounts as $card_number => $player_ids) {
         // Notify players
+        $cardId = $cardCountIds[$card_number][0];
+        $color = $this->getPlayerColor($player_ids[0]);
         self::notifyAllPlayers(
           'cardPlayed',
-          clienttranslate('${player_name} plays ${card_number}'),
+          clienttranslate('${player_name} plays ${card_value}'),
           array(
-            'player_name' => "todo build query",
-            'card_number' => $card_number,
+            'player_name' => self::getPlayerNameById($player_ids[0]),
+            'card_id' => $cardId,
+            'card_value' => $card_number,
+            // string pad in php
+            'card_number2' => str_pad($card_number, 2, '0', STR_PAD_LEFT),
+            'card_number' => str_pad($card_number, 3, '0', STR_PAD_LEFT),
+            'color' => $color,
           )
         );
       }
@@ -210,97 +230,79 @@ class LockAndChain extends Table
     // The move is valid if we've reached this point
   }
 
-  private function checkChainsAndLocks($player_id, $card_id, $cell_id, $lock)
+  private function rebuildChainsAndLocks()
   {
-    $player_cards = self::getObjectListFromDB("SELECT * FROM CardPlacements WHERE player_id = $player_id ORDER BY position");
-    $new_card = ['position' => $cell_id];
-    $player_cards[] = $new_card;
-    usort($player_cards, function ($a, $b) {
-      return $a['position'] - $b['position'];
-    });
+    // Clear existing chains and locks
+    self::DbQuery("DELETE FROM Chains");
+    self::DbQuery("DELETE FROM Locks");
 
-    // Check for chains
-    $chains = [];
-    for ($i = 0; $i < count($player_cards) - 1; $i++) {
-      if ($player_cards[$i + 1]['position'] - $player_cards[$i]['position'] > 1) {
-        $chains[] = [
-          'start_position' => $player_cards[$i]['position'],
-          'end_position' => $player_cards[$i + 1]['position']
-        ];
-      }
+    $players = self::loadPlayersBasicInfos();
+    $boardState = array();
+
+    // Build the current board state
+    $placements = self::getObjectListFromDB("
+        SELECT cp.card_number, cp.player_id, cp.position
+        FROM CardPlacements cp
+        INNER JOIN (
+            SELECT card_number, MAX(position) as max_position
+            FROM CardPlacements
+            GROUP BY card_number
+        ) top_cards ON cp.card_number = top_cards.card_number AND cp.position = top_cards.max_position
+        ORDER BY cp.card_number
+    ");
+
+    foreach ($placements as $placement) {
+      $boardState[$placement['card_number']] = $placement['player_id'];
     }
 
-    // Update chains in the database
-    self::DbQuery("DELETE FROM Chains WHERE player_id = $player_id");
-    foreach ($chains as $chain) {
-      self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, {$chain['start_position']}, {$chain['end_position']})");
-    }
+    // Process chains and locks for each player
+    foreach ($players as $player_id => $player) {
+      $chain_start = null;
+      $lock_start = null;
+      $consecutive_count = 0;
 
-    // Check for locks
-    if ($lock) {
-      $consecutive_cards = 1;
-      $start_position = $cell_id;
-      $end_position = $cell_id;
+      for ($i = 1; $i <= 36; $i++) {
+        if (isset($boardState[$i]) && $boardState[$i] == $player_id) {
+          if ($chain_start === null) {
+            $chain_start = $i;
+          }
+          $consecutive_count++;
 
-      for ($i = 0; $i < count($player_cards); $i++) {
-        if ($player_cards[$i]['position'] == $cell_id) {
-          // Check backwards
-          for ($j = $i - 1; $j >= 0; $j--) {
-            if ($player_cards[$j]['position'] == $player_cards[$j + 1]['position'] - 1) {
-              $consecutive_cards++;
-              $start_position = $player_cards[$j]['position'];
-            } else {
-              break;
+          // Check for lock
+          if ($consecutive_count >= 3) {
+            if ($lock_start === null) {
+              $lock_start = $i - 2;
+            }
+            // Extend existing lock
+            if ($i == 36 || !isset($boardState[$i + 1]) || $boardState[$i + 1] != $player_id) {
+              self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $lock_start, $i)");
+              $lock_start = null;
             }
           }
-          // Check forwards
-          for ($j = $i + 1; $j < count($player_cards); $j++) {
-            if ($player_cards[$j]['position'] == $player_cards[$j - 1]['position'] + 1) {
-              $consecutive_cards++;
-              $end_position = $player_cards[$j]['position'];
-            } else {
-              break;
+        } else {
+          // End of a sequence
+          if ($chain_start !== null) {
+            if ($i - $chain_start > 1) {
+              self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $chain_start, " . ($i - 1) . ")");
             }
+            $chain_start = null;
           }
-          break;
+          $consecutive_count = 0;
+          $lock_start = null;
         }
       }
 
-      if ($consecutive_cards >= 3) {
-        self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $start_position, $end_position)");
-
-        // Notify players about the new lock
-        self::notifyAllPlayers(
-          'newLock',
-          clienttranslate('${player_name} created a lock from ${start} to ${end}'),
-          array(
-            'player_id' => $player_id,
-            'player_name' => self::getPlayerNameById($player_id),
-            'start' => $start_position,
-            'end' => $end_position
-          )
-        );
+      // Handle chain that ends at 36
+      if ($chain_start !== null && 36 - $chain_start > 0) {
+        self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $chain_start, 36)");
       }
     }
-
-    // Notify players about updated chains
-    self::notifyAllPlayers(
-      'chainsUpdated',
-      clienttranslate('${player_name} chains have been updated'),
-      array(
-        'player_id' => $player_id,
-        'player_name' => self::getPlayerNameById($player_id),
-        'chains' => $chains
-      )
-    );
   }
 
   // Handle player actions
-  public function playCard($card_id, $card_number, $lock = false)
+  public function playCard($card_id, $card_number)
   {
-    self::checkAction('playCard');
     $player_id = self::getActivePlayerId();
-
     try {
       // Validate the move
       $this->validateCardPlay($player_id, $card_id, $card_number);
@@ -308,10 +310,16 @@ class LockAndChain extends Table
       // Update the game state
       self::DbQuery("UPDATE Cards SET card_location = 'board' WHERE card_id = $card_id");
 
-      // Check for chains and locks
-      $this->checkChainsAndLocks($player_id, $card_id, $card_number, $lock);
+      $sql = "INSERT INTO CardPlacements (card_id, player_id, card_number, position)
+        SELECT $card_id, $player_id, $card_number,
+               COALESCE(
+                   (SELECT MAX(position) + 1
+                    FROM (SELECT * FROM CardPlacements) AS cp
+                    WHERE cp.card_number = $card_number),
+                   1
+               ) AS new_position";
 
-      self::DbQuery("INSERT INTO CardPlacements (game_id, card_id, player_id, card_number) VALUES ({$this->getGameId()}, $card_id, $player_id, $card_number)");
+      self::DbQuery($sql);
 
     } catch (BgaUserException $e) {
       $this->gamestate->changeActivePlayer($player_id); // Set the active player to the current player
@@ -387,34 +395,6 @@ class LockAndChain extends Table
       $this->gamestate->nextState('nextPlayer');
     }
   }
-
-  // public function resolveSelections()
-  // {
-  //   // Retrieve all player selections
-  //   $selections = self::getCollectionFromDB("SELECT player_id, card_id FROM PlayerSelections");
-
-  //   // Prepare the data for client-side resolution
-  //   $selection_data = array();
-  //   foreach ($selections as $player_id => $selection) {
-  //     $card = self::getObjectFromDB("SELECT card_id, card_type AS card_color, card_type_arg AS card_number FROM Cards WHERE card_id = {$selection['card_id']}");
-  //     $selection_data[$player_id] = $card;
-  //   }
-
-  //   // Notify all players about the selections and trigger client-side resolution
-  //   self::notifyAllPlayers(
-  //     'resolveSelections',
-  //     '',
-  //     array(
-  //       'selections' => $selection_data
-  //     )
-  //   );
-
-  //   // Clear the selections table for the next round
-  //   self::DbQuery("DELETE FROM PlayerSelections");
-
-  //   // Move to the next game state (you might want to wait for client-side resolution to complete)
-  //   $this->gamestate->nextState('nextRound');
-  // }
 
   function stNextPlayer()
   {
@@ -502,7 +482,7 @@ class LockAndChain extends Table
   // Helper method to get cards
   private function getCards($player_id, $location, $nbr = 1)
   {
-    return self::getObjectListFromDB("SELECT card_id id, card_type_arg type FROM Cards WHERE card_location='$location' AND player_id=$player_id ORDER BY card_location_arg LIMIT $nbr");
+    return self::getObjectListFromDB("SELECT card_type, card_id id, card_type_arg type FROM Cards WHERE card_location='$location' AND player_id=$player_id ORDER BY card_location_arg LIMIT $nbr");
   }
 
   // Helper method to move a card
