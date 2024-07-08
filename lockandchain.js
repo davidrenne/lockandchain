@@ -1,14 +1,18 @@
 // At the top of your lockandchain.js file, outside of the define block:
 var jstpl_player_hand =
-  '<div id="player_hand_${PLAYER_ID}" class="player_hand">\
-    <h3>${PLAYER_NAME}\'s Hand</h3>\
-    ${PLAYER_CARDS}\
-</div>';
+  '<h3>${PLAYER_NAME}\'s Hand</h3>\
+    <div id="player_hand_${PLAYER_ID}" class="player_hand">\
+      ${PLAYER_CARDS}\
+   </div>';
 
 var jstpl_player_card =
   '<div class="player_card" id="player_card_${CARD_ID}">\
     <img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" />\
 </div>';
+
+var selectedCard = null;
+var jstpl_confirm_button =
+  '<button id="confirm_button" class="bgabutton bgabutton_blue">Confirm Selection</button>';
 
 define([
   "dojo",
@@ -56,8 +60,9 @@ define([
         this.makeCardsSelectable(currentPlayerId);
       }
 
-      // Add confirm button only for the current player
-      this.addConfirmButton(currentPlayerId);
+      // Add confirm button
+      dojo.place(jstpl_confirm_button, "player_hand_container", "after");
+      dojo.connect($("confirm_button"), "onclick", this, "onConfirmSelection");
 
       this.setupNotifications();
 
@@ -70,20 +75,6 @@ define([
           dojo.connect(card, "onclick", this, "onCardSelect");
         })
       );
-    },
-
-    addConfirmButton: function (playerId) {
-      let playerBoard = dojo.byId(`player_board_${playerId}`);
-      if (playerBoard) {
-        dojo.place(
-          `<button id="confirm-button-${playerId}" class="confirm-button">Confirm Selection</button>`,
-          playerBoard
-        );
-        let confirmButton = dojo.byId(`confirm-button-${playerId}`);
-        if (confirmButton) {
-          dojo.connect(confirmButton, "onclick", this, "onConfirmSelection");
-        }
-      }
     },
 
     onPlayerCardClick: function (evt) {
@@ -147,28 +138,33 @@ define([
     },
 
     onCardSelect: function (evt) {
-      var card = evt.currentTarget;
-      dojo.toggleClass(card, "selected");
+      if (this.checkAction("selectCard", true)) {
+        var card = evt.currentTarget;
+        if (selectedCard) {
+          dojo.removeClass(selectedCard, "selected");
+        }
+        selectedCard = card;
+        dojo.addClass(card, "selected");
+        dojo.style("confirm_button", "display", "inline-block");
+      }
     },
 
-    onConfirmSelection: function (evt) {
-      var player_id = evt.target.id.split("-")[2];
-      var selectedCard = dojo.query(
-        "#player-hand-" + player_id + " .player_card.selected"
-      )[0];
-
-      if (selectedCard) {
-        var card_id = selectedCard.id.split("_")[2];
-
-        // Send the selection to the server
-        this.ajaxcall(
-          "/lockandchain/lockandchain/selectCard.html",
-          { card_id: card_id },
-          this,
-          function (result) {}
-        );
-      } else {
-        this.showMessage(_("Please select a card before confirming."), "error");
+    onConfirmSelection: function () {
+      if (this.checkAction("selectCard", true)) {
+        if (selectedCard) {
+          var cardId = selectedCard.id.split("_")[2];
+          this.ajaxcall(
+            "/lockandchain/lockandchain/selectCard.html",
+            { card_id: cardId },
+            this,
+            function (result) {}
+          );
+        } else {
+          this.showMessage(
+            _("Please select a card before confirming."),
+            "error"
+          );
+        }
       }
     },
 

@@ -7,7 +7,7 @@
   grid-template-columns: repeat(6, 1fr);
   grid-gap: 5px;
   width: 600px; /* Adjust this value based on your desired board size */
-  margin: 0 auto;
+  margin: 0 auto 20px; /* Added bottom margin */
 }
 
 .grid_cell {
@@ -37,21 +37,38 @@
   pointer-events: none;
 }
 
-.player-hand {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 20px;
+#player_hand_container {
+  width: 600px; /* Match board width */
+  margin: 0 auto;
 }
 
-.player_card {
-  margin: 5px;
-  cursor: pointer;
+.player_hand {
+  display: flex;
+  justify-content: space-between; /* Spread cards evenly */
+  align-items: center;
+  flex-wrap: nowrap; /* Ensure single row */
 }
 
 .player_card img {
-  width: 60px; /* Adjust based on your card size */
+  width: 94px;
+}
+
+.player_card {
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out;
+  flex: 1; /* Allow cards to grow/shrink */
+  max-width: calc(100% / 7); /* Adjust based on max number of cards */
+  margin-right: 7px;
+}
+
+.player_card img {
+  width: 100%; /* Fill the card container */
   height: auto;
+  object-fit: contain;
+}
+
+.player_card.selected {
+  transform: translateY(-10px);
 }
 
 .locked {
@@ -59,4 +76,17 @@
   transition: transform 0.5s ease-in-out;
 }
 
-/* Additional styles and animations... */
+#confirm_button {
+  margin-top: 10px;
+  padding: 10px 20px;
+  font-size: 16px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: none;
+}
+
+#confirm_button:hover {
+  background-color: #45a049;
+}
