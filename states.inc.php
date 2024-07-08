@@ -48,16 +48,6 @@ $machinestates = array(
   //   "transitions" => array("playCard" => ST_NEXT_PLAYER, "selectCard" => ST_PLAYER_TURN)
   // ),
 
-  // Player's turn
-  ST_PLAYER_TURN => array(
-    "name" => "playerTurn",
-    "description" => clienttranslate('${actplayer} must select a card'),
-    "descriptionmyturn" => clienttranslate('${you} must select a card'),
-    "type" => "activeplayer",
-    "possibleactions" => array("selectCard"),
-    "transitions" => array("selectCard" => ST_PLACE_CARD)
-  ),
-
   ST_PLACE_CARD => array(
     "name" => "placeCard",
     "description" => clienttranslate('${actplayer} must place the selected card'),
@@ -67,43 +57,32 @@ $machinestates = array(
     "transitions" => array("playCard" => ST_NEXT_PLAYER)
   ),
 
+
   ST_PLAYER_TURN => array(
     "name" => "playerTurn",
-    "description" => clienttranslate('${actplayer} must select a card'),
-    "descriptionmyturn" => clienttranslate('${you} must select a card'),
+    "description" => clienttranslate('${actplayer} must play a card'),
+    "descriptionmyturn" => clienttranslate('${you} must play a card'),
     "type" => "activeplayer",
-    "possibleactions" => array("selectCard"),
-    "transitions" => array(
-      "selectCard" => ST_PLAYER_TURN,
-      "resolveSelections" => ST_RESOLVE_SELECTIONS
-    )
+    "possibleactions" => array("playCard", "selectCard", "resolveSelections"),
+    "transitions" => array("playCard" => ST_NEXT_PLAYER, "selectCard" => ST_RESOLVE_SELECTIONS, "nextPlayer" => ST_NEXT_PLAYER)
   ),
 
   ST_RESOLVE_SELECTIONS => array(
     "name" => "resolveSelections",
-    "description" => clienttranslate('Resolving card selections'),
+    "description" => "",
     "type" => "game",
     "action" => "stResolveSelections",
-    "transitions" => array("" => ST_NEXT_PLAYER)
-  ),
-
-  // Define the zombie pass state
-  'zombiePass' => array(
-    'name' => 'zombiePass',
-    'description' => '',
-    'type' => 'game',
-    'action' => 'stZombiePass',
-    'transitions' => array('playerTurn' => ST_PLAYER_TURN, 'endGame' => ST_END_GAME)
-  ),
-
-  // Transition to next player
-  ST_NEXT_PLAYER => array(
-    "name" => "nextPlayer",
-    "description" => clienttranslate('Next player\'s turn'),
-    "type" => "game",
-    "action" => "stNextPlayer",
     "transitions" => array("nextPlayer" => ST_PLAYER_TURN, "endGame" => ST_END_GAME)
   ),
+
+  ST_NEXT_PLAYER => array(
+    "name" => "nextPlayer",
+    "description" => "",
+    "type" => "game",
+    "action" => "stNextPlayer",
+    "transitions" => array("playerTurn" => ST_PLAYER_TURN)
+  ),
+
 
   // End game
   ST_END_GAME => array(

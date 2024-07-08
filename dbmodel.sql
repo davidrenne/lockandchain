@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS `PlayerSelections` (
 CREATE TABLE IF NOT EXISTS `PlayerHands` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `player_id` INT(10) UNSIGNED,
+    `card_type_arg` INT NOT NULL,
     `card_id` INT,
     FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
     FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`)

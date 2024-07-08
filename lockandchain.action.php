@@ -16,11 +16,28 @@ class action_lockandchain extends APP_GameAction
   public function selectCard()
   {
     self::setAjaxMode();
-    // Retrieve the card_id from the AJAX call
+    // Retrieve the card_id and player_id from the AJAX call
     $card_id = self::getArg("card_id", AT_posint, true);
+    $player_id = $this->game->getCurrentPlayerId(); // Get the current player ID
+
     // Call the selectCard method in your game logic
-    $this->game->selectCard($card_id);
+    $this->game->selectCard($player_id, $card_id);
+
+    // Check if all players have selected a card
+    if ($this->allPlayersHaveSelected()) {
+      $this->game->resolveSelections();
+    } else {
+      $this->game->nextPlayer();
+    }
+
     self::ajaxResponse();
+  }
+
+  private function allPlayersHaveSelected()
+  {
+    $players = self::getCollectionFromDB("SELECT player_id FROM player WHERE player_eliminated = 0");
+    $selections = self::getCollectionFromDB("SELECT player_id FROM PlayerSelections");
+    return count($players) === count($selections);
   }
 
   // Play card action
