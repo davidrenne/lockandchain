@@ -18,8 +18,10 @@ class action_lockandchain extends APP_GameAction
     self::setAjaxMode();
     // Retrieve the card_id from the AJAX call
     $card_id = self::getArg("card_id", AT_posint, true);
+    $player_id = $this->game->getCurrentPlayerId();
     // Call the selectCard method in your game logic
-    $this->game->selectCard($card_id);
+    $this->game->selectCard($player_id, $card_id);
+
     self::ajaxResponse();
   }
 
@@ -28,9 +30,8 @@ class action_lockandchain extends APP_GameAction
   {
     self::setAjaxMode();
     $card_id = self::getArg("card_id", AT_posint, true);
-    $cell_id = self::getArg("cell_id", AT_posint, true);
     $lock = self::getArg("lock", AT_bool, false);
-    $this->game->playCard($card_id, $cell_id, $lock);
+    $this->game->playCard($card_id, $lock);
     self::ajaxResponse();
   }
 }

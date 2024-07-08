@@ -110,20 +110,25 @@ class LockAndChain extends Table
 
 
 
-  private function validateCardPlay($player_id, $card_id, $cell_id)
+  private function isValidMove($player_id, $card_id)
   {
+    try {
+      return $this->validateCardPlay($player_id, $card_id);
+    } catch (BgaUserException $e) {
+      return false;
+    }
+  }
+
+  private function validateCardPlay($player_id, $card_id)
+  {
+    $this->customLog("2e11e211e2", "1222222");
     // Check if the card belongs to the player
     $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id AND card_location = 'hand' AND card_location_arg = $player_id");
     if (!$card) {
       throw new BgaUserException(self::_("You don't have this card in your hand"));
     }
 
-    // Check if the cell is empty
-    $existing_card = self::getObjectFromDB("SELECT * FROM CardPlacements WHERE position = $cell_id");
-    if ($existing_card) {
-      throw new BgaUserException(self::_("This cell is already occupied"));
-    }
-
+    $this->customLog("afdasdf21ee21e2112e212efe333", "1222222");
     // Check for chains
     $chains = self::getObjectListFromDB("SELECT * FROM Chains WHERE player_id != $player_id");
     foreach ($chains as $chain) {
@@ -133,13 +138,13 @@ class LockAndChain extends Table
     }
 
     // Check for locks
-    $locks = self::getObjectListFromDB("SELECT * FROM Locks");
+    $locks = self::getObjectListFromDB("SELECT * FROM Locks WHERE player_id != $player_id");
     foreach ($locks as $lock) {
       if ($cell_id >= $lock['start_position'] && $cell_id <= $lock['end_position']) {
         throw new BgaUserException(self::_("You cannot play on a locked position"));
       }
     }
-
+    return true;
     // The move is valid if we've reached this point
   }
 
@@ -231,17 +236,20 @@ class LockAndChain extends Table
   // Handle player actions
   public function playCard($card_id, $cell_id, $lock = false)
   {
+    $this->customLog("1111111111", "1222222");
     self::checkAction('playCard');
     $player_id = self::getActivePlayerId();
 
     try {
       // Validate the move
-      $this->validateCardPlay($player_id, $card_id, $cell_id);
+      $this->validateCardPlay($player_id, $card_id);
+      $this->customLog("afdasdffe333", "1222222");
 
       // Update the game state
       self::DbQuery("UPDATE Cards SET card_location = 'board', card_location_arg = $cell_id WHERE card_id = $card_id");
       self::DbQuery("INSERT INTO CardPlacements (game_id, card_id, player_id, position) VALUES ({$this->getGameId()}, $card_id, $player_id, $cell_id)");
 
+      $this->customLog("hrhehhhweherewrew", "1222222");
       // Check for chains and locks
       $this->checkChainsAndLocks($player_id, $card_id, $cell_id, $lock);
 
@@ -261,12 +269,15 @@ class LockAndChain extends Table
 
       // Check for game end conditions
       if ($this->checkEndGame()) {
+        $this->customLog("asdfasdfdsafsadsf", "1222222");
         $this->gamestate->nextState('endGame');
       } else {
         // Move to the next player
+        $this->customLog("asdfasdfdsafsadsf", "jjjjjjj");
         $this->gamestate->nextState('nextPlayer');
       }
     } catch (BgaUserException $e) {
+      $this->customLog("throwww", "throwww");
       // Return the error message to the client
       throw new BgaUserException($e->getMessage());
     }
@@ -297,10 +308,12 @@ class LockAndChain extends Table
     $sql = "INSERT INTO game_logs (section, message) VALUES ('$escapedSection', '$escapedMessage')";
     self::DbQuery($sql);
   }
-  public function selectCard($card_id)
+
+  function selectCard($player_id, $card_id)
   {
     self::checkAction('selectCard');
 
+    $this->customLog("ifowiewfoiijofijweiojfewijofewioj", "1222222");
     // Get the current player's ID
     $player_id = self::getCurrentPlayerId();
 
@@ -310,40 +323,41 @@ class LockAndChain extends Table
       throw new BgaUserException(self::_("You don't have this card in your hand"));
     }
 
-    // Check if the player has already made a selection
-    $existing_selection = self::getUniqueValueFromDB("SELECT card_id FROM PlayerSelections WHERE player_id = $player_id");
-    if ($existing_selection) {
-      // If there's an existing selection, remove it
-      self::DbQuery("DELETE FROM PlayerSelections WHERE player_id = $player_id");
-    }
+    $this->customLog("aadsdsdsdsdasads", "1222222");
+    // Check if the card is playable
+    if ($this->isValidMove($player_id, $card_id)) {
+      // Move the card from the player's hand to the board
+      $this->playCard($player_id, $card_id);
 
-    // Record the player's selection
-    self::DbQuery("INSERT INTO PlayerSelections (player_id, card_id) VALUES ($player_id, $card_id)");
-
-    // Notify all players about the selection (without revealing the card)
-    self::notifyAllPlayers(
-      'cardSelected',
-      clienttranslate('${player_name} has selected a card'),
-      array(
-        'player_id' => $player_id,
-        'player_name' => self::getActivePlayerName(),
-      )
-    );
-
-    // Check if all players have made their selections
-    $players_count = self::getPlayersNumber();
-    $selections_count = self::getUniqueValueFromDB("SELECT COUNT(*) FROM PlayerSelections");
-
-    if ($selections_count == $players_count) {
-      // All players have made their selections, move to the resolution phase
-      $this->gamestate->nextState('resolveSelections');
+      // Notify all players about the selection (without revealing the card)
+      self::notifyAllPlayers(
+        'cardSelected',
+        clienttranslate('${player_name} has selected a card'),
+        array(
+          'player_id' => $player_id,
+          'player_name' => self::getActivePlayerName(),
+        )
+      );
+      // Check if all players have selected
+      if ($this->allPlayersSelected()) {
+        $this->gamestate->nextState("resolveSelections");
+      } else {
+        $this->gamestate->nextState("nextPlayer");
+      }
     } else {
-      // If not all players have selected, stay in the current state
-      $this->gamestate->nextState('stayHere');
+      throw new BgaUserException(self::_("This card cannot be played."));
     }
   }
 
-  public function resolveSelections()
+  private function allPlayersSelected()
+  {
+    $players = self::loadPlayersBasicInfos();
+    $selectedCount = self::getUniqueValueFromDB("SELECT COUNT(DISTINCT player_no) FROM PlayerSelections");
+    return count($players) == $selectedCount;
+  }
+
+
+  public function stResolveSelections()
   {
     // Retrieve all player selections
     $selections = self::getCollectionFromDB("SELECT player_id, card_id FROM PlayerSelections");
@@ -373,8 +387,9 @@ class LockAndChain extends Table
 
   function stNextPlayer()
   {
-    // Proceed to the next player
     $player_id = self::activeNextPlayer();
+    $this->gamestate->changeActivePlayer($player_id);
+
     if ($this->isGameEnd()) {
       $this->gamestate->nextState("endGame");
     } else {
@@ -382,12 +397,40 @@ class LockAndChain extends Table
     }
   }
 
-  // Function to check if the game should end
   function isGameEnd()
   {
-    // Implement your logic to check if the game should end
-    // Return true if the game should end, otherwise false
+    $players = self::loadPlayersBasicInfos();
+    $active_players = array_filter($players, function ($player) {
+      return $player['player_zombie'] == 0;
+    });
+
+    if (count($active_players) <= 2) {
+      foreach ($active_players as $player_id => $player) {
+        if (!$this->hasLegalMove($player_id)) {
+          return true;
+        }
+      }
+    }
+
     return false;
+  }
+
+  function hasLegalMove($player_id)
+  {
+    // Implement your logic to check if a player has a legal move
+    $cards_in_hand = self::getObjectListFromDB("SELECT card_id FROM PlayerHands WHERE player_no = $player_id");
+    foreach ($cards_in_hand as $card) {
+      if ($this->isLegalMove($player_id, $card['card_id'])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function isLegalMove($player_id, $card_id)
+  {
+    // Implement your game-specific logic to check if a move is legal
+    return true; // Placeholder
   }
 
 

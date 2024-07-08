@@ -48,16 +48,6 @@ $machinestates = array(
   //   "transitions" => array("playCard" => ST_NEXT_PLAYER, "selectCard" => ST_PLAYER_TURN)
   // ),
 
-  // Player's turn
-  ST_PLAYER_TURN => array(
-    "name" => "playerTurn",
-    "description" => clienttranslate('${actplayer} must select a card'),
-    "descriptionmyturn" => clienttranslate('${you} must select a card'),
-    "type" => "activeplayer",
-    "possibleactions" => array("selectCard"),
-    "transitions" => array("selectCard" => ST_PLACE_CARD)
-  ),
-
   ST_PLACE_CARD => array(
     "name" => "placeCard",
     "description" => clienttranslate('${actplayer} must place the selected card'),
@@ -99,10 +89,10 @@ $machinestates = array(
   // Transition to next player
   ST_NEXT_PLAYER => array(
     "name" => "nextPlayer",
-    "description" => clienttranslate('Next player\'s turn'),
+    "description" => clienttranslate('Next player must play a card'),
     "type" => "game",
     "action" => "stNextPlayer",
-    "transitions" => array("nextPlayer" => ST_PLAYER_TURN, "endGame" => ST_END_GAME)
+    "transitions" => array("playerTurn" => ST_PLAYER_TURN, "endGame" => ST_END_GAME),
   ),
 
   // End game
@@ -111,6 +101,6 @@ $machinestates = array(
     "description" => clienttranslate("End of game"),
     "type" => "manager",
     "action" => "stEndGame",
-    "transitions" => array("" => ST_BGA_GAME_SETUP)
+    "transitions" => array()
   ),
 );
