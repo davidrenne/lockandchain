@@ -83,7 +83,7 @@ define([
           "/lockandchain/lockandchain/playCard.html",
           {
             card_id: cardId,
-            lock: false,
+            lock: true,
           },
           this,
           function (result) {}
@@ -101,7 +101,7 @@ define([
           {
             card_id: cardId,
             cell_id: cellId,
-            lock: false,
+            lock: true,
           },
           this,
           function (result) {}

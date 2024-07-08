@@ -20,77 +20,43 @@ class LockAndChain extends Table
     // Used for translations and stuff. Please do not modify.
     return "lockandchain";
   }
-  // Setup new game
+
   protected function setupNewGame($players, $options = array())
   {
-    // Create necessary tables using structured DbQuery calls
-    self::DbQuery("
-        CREATE TABLE IF NOT EXISTS `Cards` (
-            `card_id` INT AUTO_INCREMENT PRIMARY KEY,
-            `card_type` VARCHAR(32) NOT NULL,
-            `card_type_arg` INT NOT NULL,
-            `card_location` VARCHAR(32) NOT NULL,
-            `card_location_arg` INT NOT NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-    ");
+    // Start a database transaction
+    self::DbQuery("START TRANSACTION");
 
-    self::DbQuery("
-        CREATE TABLE IF NOT EXISTS `PlayerHands` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `player_id` INT(10) UNSIGNED,
-            `card_id` INT,
-            FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
-            FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-    ");
+    try {
+      // Initialize players
+      $this->initializePlayers($players);
 
-    self::DbQuery("
-        CREATE TABLE IF NOT EXISTS `CardPlacements` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `game_id` INT,
-            `card_id` INT,
-            `player_id` INT(10) UNSIGNED,
-            `position` INT,
-            FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`),
-            FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-    ");
+      // Initialize decks and cards
+      $this->initDecks();
 
-    self::DbQuery("
-        CREATE TABLE IF NOT EXISTS `Chains` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `player_id` INT(10) UNSIGNED,
-            `start_position` INT,
-            `end_position` INT,
-            FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-    ");
+      $this->dealInitialHands($players);
 
-    self::DbQuery("
-        CREATE TABLE IF NOT EXISTS `Locks` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `player_id` INT(10) UNSIGNED,
-            `start_position` INT,
-            `end_position` INT,
-            FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-    ");
+      // Set up game state
+      $this->setGameStateInitialValue('currentTurn', 0);
 
-    self::DbQuery("
-        CREATE TABLE IF NOT EXISTS `GameActions` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `game_id` INT,
-            `player_id` INT(10) UNSIGNED,
-            `action_type` VARCHAR(50),
-            `card_id` INT,
-            `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (`player_id`) REFERENCES `player`(`player_id`),
-            FOREIGN KEY (`card_id`) REFERENCES `Cards`(`card_id`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-    ");
+      $this->activeNextPlayer();
 
-    // Initialize players
-    // Initialize players
+      // Commit the transaction
+      self::DbQuery("COMMIT");
+
+      return array(
+        'players' => $players,
+        'options' => $options
+      );
+
+    } catch (Exception $e) {
+      self::DbQuery("ROLLBACK");
+      $this->customLog("setupNewGame", "Error during game setup: " . $e->getMessage());
+      throw $e;
+    }
+  }
+
+  private function initializePlayers($players)
+  {
     $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar) VALUES ";
     $values = array();
     foreach ($players as $player_id => $player) {
@@ -99,48 +65,21 @@ class LockAndChain extends Table
     }
     $sql .= implode(',', $values);
     self::DbQuery($sql);
+  }
 
-    // Log player information
-    self::dump("Players initialized:", $players);
-
-    // Initialize decks and cards
-    $this->initDecks();
-
-    // Deal cards to players
+  private function dealInitialHands($players)
+  {
     $playerCount = count($players);
     $cardsPerPlayer = ($playerCount == 2) ? 7 : (($playerCount == 3) ? 6 : 5);
 
-    self::dump("Cards per player:", $cardsPerPlayer);
-
     foreach ($players as $player_id => $player) {
       $cards = $this->getCards($player_id, 'deck', $cardsPerPlayer);
-      self::dump("Cards for player $player_id:", $cards);
-
       foreach ($cards as $card) {
         $this->moveCard($card['id'], 'hand', $player_id);
-        // Also insert into PlayerHands table
-        $sql = "INSERT INTO PlayerHands (player_id, card_id) VALUES ($player_id, {$card['id']})";
-        self::DbQuery($sql);
-
-        // Log the SQL query
-        self::dump("SQL query executed:", $sql);
-
-        // Verify insertion
-        $inserted = self::getObjectFromDB("SELECT * FROM PlayerHands WHERE player_id = $player_id AND card_id = {$card['id']}");
-        self::dump("Inserted record:", $inserted);
+        self::DbQuery("INSERT INTO PlayerHands (player_id, card_id) VALUES ($player_id, {$card['id']})");
       }
     }
-
-    // Verify PlayerHands after setup
-    $allPlayerHands = self::getObjectListFromDB("SELECT * FROM PlayerHands");
-    self::dump("All PlayerHands after setup:", $allPlayerHands);
-
-    // Set up game state
-    $this->setGameStateInitialValue('currentTurn', 0);
-
-    $this->activeNextPlayer();
   }
-
   private function initDecks()
   {
     // Each player gets a deck of cards 1-36
@@ -152,6 +91,7 @@ class LockAndChain extends Table
           'card_type' => $player['player_color'],
           'card_type_arg' => $i,
           'card_location' => 'deck',
+          'player_id' => $player['player_id'],
           'card_location_arg' => $player_id
         );
       }
@@ -159,14 +99,10 @@ class LockAndChain extends Table
 
     // Insert cards into Cards table
     foreach ($cards as $card) {
-      $sql = "INSERT INTO Cards (card_type, card_type_arg, card_location, card_location_arg) 
-                VALUES ('{$card['card_type']}', {$card['card_type_arg']}, '{$card['card_location']}', {$card['card_location_arg']})";
+      $sql = "INSERT INTO Cards (card_type, card_type_arg, card_location, player_id, card_location_arg) 
+                VALUES ('{$card['card_type']}', {$card['card_type_arg']}, '{$card['card_location']}', {$card['player_id']}, {$card['card_location_arg']})";
       self::DbQuery($sql);
     }
-
-    // Log the number of cards inserted
-    $cardCount = self::getUniqueValueFromDB("SELECT COUNT(*) FROM Cards");
-    self::dump("Total cards inserted:", $cardCount);
 
     // Shuffle the deck
     $this->shuffleDeck();
@@ -295,6 +231,7 @@ class LockAndChain extends Table
   // Handle player actions
   public function playCard($card_id, $cell_id, $lock = false)
   {
+    self::checkAction('playCard');
     $player_id = self::getActivePlayerId();
 
     try {
@@ -335,10 +272,35 @@ class LockAndChain extends Table
     }
   }
 
+
+  public function getGameLogs($limit = 100, $section = null)
+  {
+    $sql = "SELECT * FROM game_logs";
+    if ($section !== null) {
+      $escapedSection = self::escapeStringForDB($section);
+      $sql .= " WHERE section = '$escapedSection'";
+    }
+    $sql .= " ORDER BY created_at DESC LIMIT $limit";
+    return self::getObjectListFromDB($sql);
+  }
+
+  private function customLog($section, $data = null)
+  {
+    $escapedSection = self::escapeStringForDB($section);
+    $escapedMessage = "";
+
+    if ($data !== null) {
+      $dataString = is_array($data) || is_object($data) ? json_encode($data) : strval($data);
+      $escapedMessage .= " | Data: " . self::escapeStringForDB($dataString);
+    }
+
+    $sql = "INSERT INTO game_logs (section, message) VALUES ('$escapedSection', '$escapedMessage')";
+    self::DbQuery($sql);
+  }
   public function selectCard()
   {
+    self::checkAction('selectCard');
     self::setAjaxMode();
-
     // Retrieve the card_id from the AJAX call
     $card_id = self::getArg("card_id", AT_posint, true);
 
@@ -454,7 +416,7 @@ class LockAndChain extends Table
   // Helper method to get cards
   private function getCards($player_id, $location, $nbr = 1)
   {
-    return self::getObjectListFromDB("SELECT card_id id, card_type_arg type FROM Cards WHERE card_location='$location' AND card_location_arg=$player_id ORDER BY card_location_arg LIMIT $nbr");
+    return self::getObjectListFromDB("SELECT card_id id, card_type_arg type FROM Cards WHERE card_location='$location' AND player_id=$player_id ORDER BY card_location_arg LIMIT $nbr");
   }
 
   // Helper method to move a card
@@ -462,11 +424,6 @@ class LockAndChain extends Table
   {
     $sql = "UPDATE Cards SET card_location='$location', card_location_arg='$location_arg' WHERE card_id=$card_id";
     self::DbQuery($sql);
-    self::dump("moveCard SQL:", $sql);
-
-    // Verify the move
-    $updatedCard = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id=$card_id");
-    self::dump("Card after move:", $updatedCard);
   }
 
   public function getPlayerCards($player_id)
