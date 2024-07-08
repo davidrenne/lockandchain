@@ -55,24 +55,6 @@ class LockAndChain extends Table
     }
   }
 
-  private function allPlayersHaveSelected()
-  {
-    $players = self::getCollectionFromDB("SELECT player_id FROM player WHERE player_eliminated = 0");
-    $selections = self::getCollectionFromDB("SELECT player_id FROM PlayerSelections");
-    return count($players) === count($selections);
-  }
-
-  function resolveSelections()
-  {
-    $this->gamestate->nextState("resolveSelections");
-  }
-
-  function nextPlayer()
-  {
-    $this->gamestate->nextState("nextPlayer");
-  }
-
-
   function stResolveSelections()
   {
     // Get the selected cards for the round
@@ -105,10 +87,11 @@ class LockAndChain extends Table
           $this->playCard($card_id, $card_number);
         }
       }
+
       // Clear selections for the next round
       self::DbQuery("DELETE FROM PlayerSelections");
 
-      $transition = "nextPlayer";
+      $transition = "nextTurn";
       if ($this->isGameEnd()) {
         $transition = "endGame";
       }
@@ -125,11 +108,12 @@ class LockAndChain extends Table
           )
         );
       }
-
+      $this->customLog("transition", $transition);
       // Proceed to the next player or end game
       $this->gamestate->nextState($transition);
       self::DbQuery('COMMIT');
     } catch (Exception $e) {
+      $this->customLog("adsfasdfasdfdfsa", $e->getMessage());
       self::DbQuery('ROLLBACK');
       throw new BgaUserException($e->getMessage());
     }
@@ -304,9 +288,7 @@ class LockAndChain extends Table
   // Handle player actions
   public function playCard($card_id, $card_number, $lock = false)
   {
-    self::checkAction('playCard');
     $player_id = self::getActivePlayerId();
-
     try {
       // Validate the move
       $this->validateCardPlay($player_id, $card_id, $card_number);
@@ -355,7 +337,6 @@ class LockAndChain extends Table
   {
     self::checkAction('selectCard');
 
-    $this->customLog("resolveSelections", "111");
     // Validate that the card belongs to the player
     $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id AND card_location = 'hand' AND player_id = $player_id");
     if (!$card) {
@@ -395,12 +376,39 @@ class LockAndChain extends Table
     }
   }
 
+  // public function resolveSelections()
+  // {
+  //   // Retrieve all player selections
+  //   $selections = self::getCollectionFromDB("SELECT player_id, card_id FROM PlayerSelections");
+
+  //   // Prepare the data for client-side resolution
+  //   $selection_data = array();
+  //   foreach ($selections as $player_id => $selection) {
+  //     $card = self::getObjectFromDB("SELECT card_id, card_type AS card_color, card_type_arg AS card_number FROM Cards WHERE card_id = {$selection['card_id']}");
+  //     $selection_data[$player_id] = $card;
+  //   }
+
+  //   // Notify all players about the selections and trigger client-side resolution
+  //   self::notifyAllPlayers(
+  //     'resolveSelections',
+  //     '',
+  //     array(
+  //       'selections' => $selection_data
+  //     )
+  //   );
+
+  //   // Clear the selections table for the next round
+  //   self::DbQuery("DELETE FROM PlayerSelections");
+
+  //   // Move to the next game state (you might want to wait for client-side resolution to complete)
+  //   $this->gamestate->nextState('nextRound');
+  // }
+
   function stNextPlayer()
   {
     // Proceed to the next player
-    $current_player_id = $this->getCurrentPlayerId();
-    $next_player_id = self::getPlayerAfter($current_player_id);
-    $this->gamestate->changeActivePlayer($next_player_id); // Set the active player to the current player
+    $player_id = self::activeNextPlayer();
+    $this->gamestate->changeActivePlayer($player_id); // Set the active player to the current player
     if ($this->isGameEnd()) {
       $this->gamestate->nextState("endGame");
     } else {

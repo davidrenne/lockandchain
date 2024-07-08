@@ -24,8 +24,12 @@ if (!defined('ST_RESOLVE_SELECTIONS')) {
   define('ST_RESOLVE_SELECTIONS', 6);
 }
 
+if (!defined('ZOMBIE_PASS')) {
+  define('ZOMBIE_PASS', 11);
+}
+
 if (!defined('ST_END_GAME')) {
-  define('ST_END_GAME', 99999);
+  define('ST_END_GAME', 99);
 }
 
 
@@ -39,32 +43,26 @@ $machinestates = array(
     "transitions" => array("" => ST_PLAYER_TURN)
   ),
 
-  // ST_PLAYER_TURN => array(
-  //   "name" => "playerTurn",
-  //   "description" => clienttranslate('${actplayer} must play a card'),
-  //   "descriptionmyturn" => clienttranslate('${you} must play a card'),
-  //   "type" => "activeplayer",
-  //   "possibleactions" => array("playCard", "selectCard"),
-  //   "transitions" => array("playCard" => ST_NEXT_PLAYER, "selectCard" => ST_PLAYER_TURN)
-  // ),
-
-  ST_PLACE_CARD => array(
-    "name" => "placeCard",
-    "description" => clienttranslate('${actplayer} must place the selected card'),
-    "descriptionmyturn" => clienttranslate('${you} must place the selected card'),
-    "type" => "activeplayer",
-    "possibleactions" => array("playCard"),
-    "transitions" => array("playCard" => ST_NEXT_PLAYER)
-  ),
-
-
   ST_PLAYER_TURN => array(
     "name" => "playerTurn",
     "description" => clienttranslate('${actplayer} must play a card'),
     "descriptionmyturn" => clienttranslate('${you} must play a card'),
-    "type" => "activeplayer",
-    "possibleactions" => array("playCard", "selectCard", "resolveSelections"),
-    "transitions" => array("playCard" => ST_NEXT_PLAYER, "selectCard" => ST_RESOLVE_SELECTIONS, "nextPlayer" => ST_NEXT_PLAYER)
+    "type" => "multipleactiveplayer",
+    "possibleactions" => array("selectCard", "resolveSelections"),
+    "transitions" => array(
+      "selectCard" => ST_RESOLVE_SELECTIONS,
+      "nextPlayer" => ST_NEXT_PLAYER,
+      "zombiePass" => ZOMBIE_PASS,
+      "resolveSelections" => ST_RESOLVE_SELECTIONS,
+    )
+  ),
+
+  ZOMBIE_PASS => array(
+    'name' => 'zombiePass',
+    'description' => '',
+    'type' => 'game',
+    'action' => 'stZombiePass',
+    'transitions' => array('playerTurn' => ST_PLAYER_TURN, 'endGame' => ST_END_GAME)
   ),
 
   ST_RESOLVE_SELECTIONS => array(
