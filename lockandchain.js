@@ -29,13 +29,19 @@ define([
     setup: function (gamedatas) {
       console.log("Starting game setup");
 
-      // Setup the board
-      // for (let i = 1; i <= 36; i++) {
-      //   let cellId = i.toString().padStart(3, "0");
-      //   let cell = dojo.byId(`cell_${cellId}`);
-      // }
-
       // Setup the current player's hand
+      this.refreshPlayerHand(gamedatas);
+
+      // Add confirm button
+      dojo.place(jstpl_confirm_button, "player_hand_container", "after");
+      dojo.connect($("confirm_button"), "onclick", this, "onConfirmSelection");
+
+      this.setupNotifications();
+
+      console.log("Ending game setup");
+    },
+
+    refreshPlayerHand: function (gamedatas) {
       let currentPlayerId = gamedatas.current_player_id;
       let playerHandContainer = dojo.byId("player_hand_container");
       if (playerHandContainer && gamedatas.playerHand) {
@@ -56,7 +62,6 @@ define([
         dojo.place(playerHandHtml, playerHandContainer);
         this.makeCardsSelectable(currentPlayerId);
       }
-
       // Add confirm button
       dojo.place(jstpl_confirm_button, "player_hand_container", "after");
       dojo.connect($("confirm_button"), "onclick", this, "onConfirmSelection");
@@ -179,6 +184,16 @@ define([
           this.placeCard(card.card_id, card.card_number);
         }
       }
+
+      // Refresh the player's hand after resolving selections
+      this.ajaxcall(
+        "/lockandchain/lockandchain/getPlayerHand.html",
+        { player_id: this.player_id },
+        this,
+        function (gamedatas) {
+          this.refreshPlayerHand(gamedatas);
+        }
+      );
     },
 
     discardCard: function (card_id) {

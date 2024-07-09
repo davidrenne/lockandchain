@@ -33,6 +33,15 @@ class action_lockandchain extends APP_GameAction
     self::ajaxResponse();
   }
 
+  public function getPlayerHand()
+  {
+    self::setAjaxMode();
+
+    $player_id = self::getArg("player_id", AT_posint, true);
+    $result = $this->game->getCards($player_id, "hand", 7);
+    self::ajaxResponse($result);
+  }
+
   private function allPlayersHaveSelected()
   {
     $players = self::getCollectionFromDB("SELECT player_id FROM player WHERE player_eliminated = 0");

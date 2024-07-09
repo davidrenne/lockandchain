@@ -255,46 +255,64 @@ class LockAndChain extends Table
       $boardState[$placement['card_number']] = $placement['player_id'];
     }
 
-    // Process chains and locks for each player
+    $this->customLog("boardState", $boardState);
+
+    // Process chains for each player
     foreach ($players as $player_id => $player) {
       $chain_start = null;
-      $lock_start = null;
-      $consecutive_count = 0;
+      $last_position = null;
 
       for ($i = 1; $i <= 36; $i++) {
+        $this->customLog("i", $i);
+        $this->customLog(
+          "isset(boardState[$i]) && boardState[$i] == player_id",
+          (isset($boardState[$i]) ? "true" : "false") . " " .
+          (isset($boardState[$i]) && $boardState[$i] == $player_id ? "true" : "false")
+        );
+
         if (isset($boardState[$i]) && $boardState[$i] == $player_id) {
           if ($chain_start === null) {
             $chain_start = $i;
           }
-          $consecutive_count++;
-
-          // Check for lock
-          if ($consecutive_count >= 3) {
-            if ($lock_start === null) {
-              $lock_start = $i - 2;
-            }
-            // Extend existing lock
-            if ($i == 36 || !isset($boardState[$i + 1]) || $boardState[$i + 1] != $player_id) {
-              self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $lock_start, $i)");
-              $lock_start = null;
-            }
-          }
+          $last_position = $i;
         } else {
-          // End of a sequence
           if ($chain_start !== null) {
-            if ($i - $chain_start > 1) {
-              self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $chain_start, " . ($i - 1) . ")");
+            // End of a sequence or gap
+            if ($i - $last_position > 1 || $i == 36) {
+              // Insert chain
+              $this->customLog("Inserting Chain", "start: $chain_start, end: $last_position");
+              self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $chain_start, $last_position)");
+              $chain_start = null;
             }
-            $chain_start = null;
           }
-          $consecutive_count = 0;
-          $lock_start = null;
         }
       }
 
       // Handle chain that ends at 36
-      if ($chain_start !== null && 36 - $chain_start > 0) {
+      if ($chain_start !== null) {
+        $this->customLog("Inserting Final Chain", "start: $chain_start, end: 36");
         self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $chain_start, 36)");
+      }
+    }
+
+    // Process locks (if needed)
+    $this->processLocks($boardState);
+  }
+
+  private function processLocks($boardState)
+  {
+    foreach ($boardState as $position => $player_id) {
+      if (
+        isset($boardState[$position + 1]) && $boardState[$position + 1] == $player_id
+        && isset($boardState[$position + 2]) && $boardState[$position + 2] == $player_id
+      ) {
+        $lock_start = $position;
+        $lock_end = $position + 2;
+        while (isset($boardState[$lock_end + 1]) && $boardState[$lock_end + 1] == $player_id) {
+          $lock_end++;
+        }
+        $this->customLog("Inserting Lock", "start: $lock_start, end: $lock_end");
+        self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $lock_start, $lock_end)");
       }
     }
   }
@@ -302,7 +320,13 @@ class LockAndChain extends Table
   // Handle player actions
   public function playCard($card_id, $card_number)
   {
-    $player_id = self::getActivePlayerId();
+    $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id");
+    if (!$card) {
+      throw new BgaUserException(self::_("Cannot find card in playCard for card_id $card_id"));
+    }
+
+    $player_id = $card["player_id"];
+    $this->customLog("adfasdf", $player_id);
     try {
       // Validate the move
       $this->validateCardPlay($player_id, $card_id, $card_number);
@@ -425,6 +449,51 @@ class LockAndChain extends Table
     }
 
     return false;
+  }
+
+  // build out stEndGame that calls gameWinner and publishes a winner with that player id in boardgamearena.com
+  function stEndGame()
+  {
+    $winner = $this->gameWinner();
+    if ($winner != "error") {
+      self::DbQuery("UPDATE player SET player_score = 1 WHERE player_id = $winner");
+      self::notifyAllPlayers(
+        'gameEnd',
+        clienttranslate('${player_name} wins the game!'),
+        array(
+          'player_id' => $winner,
+          'player_name' => self::getPlayerNameById($winner)
+        )
+      );
+    }
+    $this->gamestate->nextState("endGame");
+  }
+
+  function gameWinner()
+  {
+    $players = self::loadPlayersBasicInfos();
+    $active_players = array_filter($players, function ($player) {
+      return $player['player_zombie'] == 0;
+    });
+
+    if (count($active_players) <= 2) {
+      $loser = 0;
+      foreach ($active_players as $player_id => $player) {
+        if (!$this->hasLegalMove($player_id)) {
+          // Return the player who has a legal move
+          $loser = $player_id;
+        }
+      }
+      $winner = 0;
+      foreach ($active_players as $player_id => $player) {
+        if ($loser != $player_id) {
+          $winner = $player_id;
+        }
+      }
+      return $winner;
+    }
+
+    return "error";
   }
 
   function hasLegalMove($player_id)

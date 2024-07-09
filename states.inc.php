@@ -67,7 +67,7 @@ $machinestates = array(
     "name" => "endGame",
     "description" => clienttranslate("End of game"),
     "type" => "manager",
-    "action" => "stEndGame",
+    "actio" => "stEndGame",
     "transitions" => array("" => ST_BGA_GAME_SETUP)
   ),
 );
