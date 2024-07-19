@@ -232,6 +232,7 @@ define([
 
       // Example 1: standard notification handling
       dojo.subscribe("cardPlayed", this, "notif_cardPlayed");
+      dojo.subscribe("cardDiscarded", this, "notif_cardDiscarded"); // Add this line
     },
 
     notif_cardPlayed: function (notif) {
@@ -253,6 +254,26 @@ define([
         "cell_" + card_number,
         "only"
       );
+
+      // Remove the card from the player's hand
+      var card_element = dojo.query("#player_card_" + notif.args.card_id)[0];
+      if (card_element) {
+        dojo.destroy(card_element);
+      }
+    },
+
+    notif_cardDiscarded: function (notif) {
+      console.log("notif_cardDiscarded");
+      console.log(notif);
+
+      // Remove the card from the player's hand
+      var card_element = dojo.query("#player_card_" + notif.args.card_id)[0];
+      if (card_element) {
+        dojo.destroy(card_element);
+      }
+
+      // Optionally, you can show a message or animation indicating the card was discarded
+      this.showMessage(_("Card discarded: ") + notif.args.card_value, "info");
     },
   });
 });

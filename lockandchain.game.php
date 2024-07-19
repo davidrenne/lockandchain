@@ -85,6 +85,7 @@ class LockAndChain extends Table
         $cardCountIds[$card['card_type_arg']][] = [$card_id];
       }
     }
+
     try {
       self::DbQuery("START TRANSACTION");
       foreach ($cardCounts as $card_number => $player_ids) {
@@ -102,6 +103,7 @@ class LockAndChain extends Table
                   'player_name' => self::getPlayerNameById($player_id),
                   'card_value' => $card['card_type_arg'],
                   'color' => $card['card_type'],
+                  'card_id' => $card_id, // Add this line
                 )
               );
             }
