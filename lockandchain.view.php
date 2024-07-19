@@ -21,6 +21,7 @@ class view_lockandchain_lockandchain extends game_view
         FROM CardPlacements cp
         LEFT JOIN Cards c ON cp.card_id = c.card_id
         WHERE cp.card_number = $i
+        AND c.card_location = 'board'
         ORDER BY cp.position DESC
         LIMIT 1
       ");
