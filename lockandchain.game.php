@@ -82,15 +82,13 @@ class LockAndChain extends Table
         $cardCountIds[$card['card_type_arg']][] = $card_id;
       } else {
         $cardCounts[$card['card_type_arg']] = [$player_id];
-        $cardCountIds[$card['card_type_arg']][] = [$card_id];
+        $cardCountIds[$card['card_type_arg']] = [$card_id];
       }
     }
-
     try {
       self::DbQuery("START TRANSACTION");
       foreach ($cardCounts as $card_number => $player_ids) {
         if (count($player_ids) > 1) {
-
           // Discard duplicate cards
           foreach ($player_ids as $player_id) {
             $card_id = $selections[$player_id]['card_id'];
@@ -103,11 +101,14 @@ class LockAndChain extends Table
                   'player_name' => self::getPlayerNameById($player_id),
                   'card_value' => $card['card_type_arg'],
                   'color' => $card['card_type'],
-                  'card_id' => $card_id, // Add this line
+                  'card_id' => $card_id,
                 )
               );
             }
             self::DbQuery("UPDATE Cards SET card_location = 'discard' WHERE card_id = $card_id");
+
+            // Remove the card from CardPlacements if it exists
+            self::DbQuery("DELETE FROM CardPlacements WHERE card_id = $card_id");
           }
         } else {
           // Place the card on the board
@@ -116,7 +117,7 @@ class LockAndChain extends Table
           $this->playCard($card_id, $card_number);
         }
 
-        self::DbQuery("DELETE FROM PlayerHands WHERE card_id = {$selections[$player_id]['card_id']}");
+        self::DbQuery("DELETE FROM PlayerHands WHERE card_id IN (" . implode(',', $cardCountIds[$card_number]) . ")");
       }
 
       // Clear selections for the next round
@@ -137,22 +138,23 @@ class LockAndChain extends Table
       }
 
       foreach ($cardCounts as $card_number => $player_ids) {
-        // Notify players
-        $cardId = $cardCountIds[$card_number][0];
-        $color = $this->getPlayerColor($player_ids[0]);
-        self::notifyAllPlayers(
-          'cardPlayed',
-          clienttranslate('${player_name} plays ${card_value}'),
-          array(
-            'player_name' => self::getPlayerNameById($player_ids[0]),
-            'card_id' => $cardId,
-            'card_value' => $card_number,
-            // string pad in php
-            'card_number2' => str_pad($card_number, 2, '0', STR_PAD_LEFT),
-            'card_number' => str_pad($card_number, 3, '0', STR_PAD_LEFT),
-            'color' => $color,
-          )
-        );
+        if (count($player_ids) == 1) {
+          // Notify players only for non-duplicate cards
+          $cardId = $cardCountIds[$card_number][0];
+          $color = $this->getPlayerColor($player_ids[0]);
+          self::notifyAllPlayers(
+            'cardPlayed',
+            clienttranslate('${player_name} plays ${card_value}'),
+            array(
+              'player_name' => self::getPlayerNameById($player_ids[0]),
+              'card_id' => $cardId,
+              'card_value' => $card_number,
+              'card_number2' => str_pad($card_number, 2, '0', STR_PAD_LEFT),
+              'card_number' => str_pad($card_number, 3, '0', STR_PAD_LEFT),
+              'color' => $color,
+            )
+          );
+        }
       }
 
       // Proceed to the next player or end game
@@ -272,65 +274,65 @@ class LockAndChain extends Table
 
     $this->customLog("boardState", $boardState);
 
-    // Process chains for each player
+    // Process chains and locks for each player
     foreach ($players as $player_id => $player) {
       $player_cards = array();
+      $consecutive_cards = array();
 
       // Collect all cards for this player
       for ($i = 1; $i <= 36; $i++) {
         if (isset($boardState[$i]) && $boardState[$i] == $player_id) {
           $player_cards[] = $i;
-        }
-      }
 
-      // Identify chains
-      $chain_start = null;
-      $chain_end = null;
-      for ($i = 0; $i < count($player_cards); $i++) {
-        if ($chain_start === null) {
-          $chain_start = $player_cards[$i];
-          $chain_end = $player_cards[$i];
-        } elseif ($player_cards[$i] - $chain_end > 1) {
-          // Check if there are any other players' cards between chain_start and chain_end
-          $other_player_cards = false;
-          for ($j = $chain_start + 1; $j < $chain_end; $j++) {
-            if (isset($boardState[$j]) && $boardState[$j] != $player_id) {
-              $other_player_cards = true;
-              break;
+          // Check for consecutive cards (for locks)
+          if (empty($consecutive_cards) || end($consecutive_cards) == $i - 1) {
+            $consecutive_cards[] = $i;
+          } else {
+            // Process lock if we have 3 or more consecutive cards
+            if (count($consecutive_cards) >= 3) {
+              $this->insertLock($player_id, $consecutive_cards[0], end($consecutive_cards));
             }
+            $consecutive_cards = array($i);
           }
-
-          // If no other player's cards and chain has at least two cards, insert the chain
-          if (!$other_player_cards && $chain_end > $chain_start) {
-            $this->customLog("Inserting Chain", "start: $chain_start, end: $chain_end");
-            self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $chain_start, $chain_end)");
-          }
-
-          // Start a new potential chain
-          $chain_start = $player_cards[$i];
         }
-        $chain_end = $player_cards[$i];
       }
 
-      // Check for the last chain
-      if ($chain_start !== null && $chain_end > $chain_start) {
-        $other_player_cards = false;
-        for ($j = $chain_start + 1; $j < $chain_end; $j++) {
-          if (isset($boardState[$j]) && $boardState[$j] != $player_id) {
-            $other_player_cards = true;
-            break;
-          }
-        }
+      // Check for a final lock
+      if (count($consecutive_cards) >= 3) {
+        $this->insertLock($player_id, $consecutive_cards[0], end($consecutive_cards));
+      }
 
-        if (!$other_player_cards) {
-          $this->customLog("Inserting Final Chain", "start: $chain_start, end: $chain_end");
-          self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $chain_start, $chain_end)");
+      // Process chains
+      $chain_start = null;
+      foreach ($player_cards as $card) {
+        if ($chain_start === null) {
+          $chain_start = $card;
+        } elseif ($card - $chain_start > 1) {
+          // Insert chain
+          $this->insertChain($player_id, $chain_start, $card);
+          $chain_start = $card;
         }
+      }
+
+      // Insert final chain if exists
+      if ($chain_start !== null && $chain_start != end($player_cards)) {
+        $this->insertChain($player_id, $chain_start, end($player_cards));
       }
     }
-
     // Process locks
     $this->processLocks($boardState);
+  }
+
+  private function insertChain($player_id, $start, $end)
+  {
+    $this->customLog("Inserting Chain", "player: $player_id, start: $start, end: $end");
+    self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
+  }
+
+  private function insertLock($player_id, $start, $end)
+  {
+    $this->customLog("Inserting Lock", "player: $player_id, start: $start, end: $end");
+    self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
   }
 
   private function processLocks($boardState)
