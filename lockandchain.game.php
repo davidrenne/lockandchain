@@ -283,14 +283,46 @@ class LockAndChain extends Table
 
       // Identify chains
       $chain_start = null;
+      $chain_end = null;
       for ($i = 0; $i < count($player_cards); $i++) {
         if ($chain_start === null) {
           $chain_start = $player_cards[$i];
-        } elseif ($i == count($player_cards) - 1 || $player_cards[$i + 1] - $player_cards[$i] > 1) {
-          // End of a chain
-          $this->customLog("Inserting Chain", "start: $chain_start, end: {$player_cards[$i]}");
-          self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $chain_start, {$player_cards[$i]})");
-          $chain_start = null;
+          $chain_end = $player_cards[$i];
+        } elseif ($player_cards[$i] - $chain_end > 1) {
+          // Check if there are any other players' cards between chain_start and chain_end
+          $other_player_cards = false;
+          for ($j = $chain_start + 1; $j < $chain_end; $j++) {
+            if (isset($boardState[$j]) && $boardState[$j] != $player_id) {
+              $other_player_cards = true;
+              break;
+            }
+          }
+
+          // If no other player's cards and chain has at least two cards, insert the chain
+          if (!$other_player_cards && $chain_end > $chain_start) {
+            $this->customLog("Inserting Chain", "start: $chain_start, end: $chain_end");
+            self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $chain_start, $chain_end)");
+          }
+
+          // Start a new potential chain
+          $chain_start = $player_cards[$i];
+        }
+        $chain_end = $player_cards[$i];
+      }
+
+      // Check for the last chain
+      if ($chain_start !== null && $chain_end > $chain_start) {
+        $other_player_cards = false;
+        for ($j = $chain_start + 1; $j < $chain_end; $j++) {
+          if (isset($boardState[$j]) && $boardState[$j] != $player_id) {
+            $other_player_cards = true;
+            break;
+          }
+        }
+
+        if (!$other_player_cards) {
+          $this->customLog("Inserting Final Chain", "start: $chain_start, end: $chain_end");
+          self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $chain_start, $chain_end)");
         }
       }
     }
