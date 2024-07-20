@@ -130,8 +130,20 @@ class LockAndChain extends Table
         foreach ($cards as $card) {
           $this->moveCard($card['id'], 'hand', $player_id);
           self::DbQuery("INSERT INTO PlayerHands (card_type_arg, player_id, card_id) VALUES ({$card['type']}, $player_id, {$card['id']})");
+          // Notify the player about their new card
+          self::notifyPlayer(
+            $player_id,
+            'newCardDrawn',
+            '',
+            array(
+              'card_id' => $card['id'],
+              'card_type' => $card['card_type'],
+              'card_type_arg' => $card['type']
+            )
+          );
         }
       }
+
       $transition = "nextPlayer";
       if ($this->isGameEnd()) {
         $transition = "endGame";
@@ -401,9 +413,10 @@ class LockAndChain extends Table
       self::DbQuery($sql);
 
     } catch (BgaUserException $e) {
-      $this->gamestate->changeActivePlayer($player_id); // Set the active player to the current player
-      $this->gamestate->nextState('playerTurn'); // Keep the player in their turn 
+      // $this->gamestate->changeActivePlayer($player_id); // Set the active player to the current player
+      // $this->gamestate->nextState('playerTurn'); // Keep the player in their turn 
       self::notifyPlayer($player_id, 'invalidMove', clienttranslate('Invalid move: ${message}'), array('message' => $e->getMessage()));
+      throw $e;
     }
   }
 

@@ -71,10 +71,20 @@ define([
       console.log("Ending game setup");
     },
 
+    makeCardSelectable: function (cardId) {
+      var card = $("player_card_" + cardId);
+      if (card) {
+        dojo.connect(card, "onclick", this, "onCardSelect");
+      }
+    },
+
     makeCardsSelectable: function (playerId) {
       dojo.query(`#player_hand_${playerId} .player_card`).forEach(
         dojo.hitch(this, function (card) {
-          dojo.connect(card, "onclick", this, "onCardSelect");
+          if (!dojo.hasClass(card, "selectable")) {
+            dojo.connect(card, "onclick", this, "onCardSelect");
+            dojo.addClass(card, "selectable");
+          }
         })
       );
     },
@@ -232,7 +242,25 @@ define([
 
       // Example 1: standard notification handling
       dojo.subscribe("cardPlayed", this, "notif_cardPlayed");
-      dojo.subscribe("cardDiscarded", this, "notif_cardDiscarded"); // Add this line
+      dojo.subscribe("cardDiscarded", this, "notif_cardDiscarded");
+      dojo.subscribe("newCardDrawn", this, "notif_newCardDrawn");
+    },
+
+    notif_newCardDrawn: function (notif) {
+      console.log("notif_newCardDrawn", notif);
+
+      // Create the new card element
+      var newCardHtml = this.format_block("jstpl_player_card", {
+        CARD_ID: notif.args.card_id,
+        CARD_COLOR: notif.args.card_type,
+        CARD_NUMBER: notif.args.card_type_arg.toString().padStart(2, "0"),
+      });
+
+      // Add the new card to the player's hand
+      dojo.place(newCardHtml, "player_hand_" + this.player_id);
+
+      // Make the new card selectable
+      this.makeCardSelectable(notif.args.card_id);
     },
 
     notif_cardPlayed: function (notif) {
