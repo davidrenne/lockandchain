@@ -247,7 +247,7 @@ class LockAndChain extends Table
 
 
 
-  private function validateCardPlay($player_id, $card_id, $card_number)
+  public function validateCardPlay($player_id, $card_id, $card_number)
   {
     // Check if the card belongs to the player
     $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id AND card_location = 'hand' AND player_id = $player_id");
@@ -283,7 +283,7 @@ class LockAndChain extends Table
     $players = self::loadPlayersBasicInfos();
     $boardState = array();
 
-    // Build the current board state
+    // Build the current board state, ordered by card number
     $placements = self::getObjectListFromDB("
         SELECT cp.card_number, cp.player_id, cp.position
         FROM CardPlacements cp
@@ -303,13 +303,16 @@ class LockAndChain extends Table
 
     // Process chains and locks for each player
     foreach ($players as $player_id => $player) {
-      $player_cards = array();
+      $chain_start = null;
+      $last_card = null;
       $consecutive_cards = array();
 
-      // Collect all cards for this player
       for ($i = 1; $i <= 36; $i++) {
         if (isset($boardState[$i]) && $boardState[$i] == $player_id) {
-          $player_cards[] = $i;
+          if ($chain_start === null) {
+            $chain_start = $i;
+          }
+          $last_card = $i;
 
           // Check for consecutive cards (for locks)
           if (empty($consecutive_cards) || end($consecutive_cards) == $i - 1) {
@@ -321,29 +324,30 @@ class LockAndChain extends Table
             }
             $consecutive_cards = array($i);
           }
+        } else {
+          // Check if we need to end a chain
+          if ($chain_start !== null && $last_card !== null && $last_card > $chain_start) {
+            $this->insertChain($player_id, $chain_start, $last_card);
+            $chain_start = null;
+            $last_card = null;
+          }
+
+          // Process lock if we have 3 or more consecutive cards
+          if (count($consecutive_cards) >= 3) {
+            $this->insertLock($player_id, $consecutive_cards[0], end($consecutive_cards));
+          }
+          $consecutive_cards = array();
         }
       }
 
-      // Check for a final lock
+      // Handle any remaining chain at the end
+      if ($chain_start !== null && $last_card !== null && $last_card > $chain_start) {
+        $this->insertChain($player_id, $chain_start, $last_card);
+      }
+
+      // Handle any remaining lock at the end
       if (count($consecutive_cards) >= 3) {
         $this->insertLock($player_id, $consecutive_cards[0], end($consecutive_cards));
-      }
-
-      // Process chains
-      $chain_start = null;
-      foreach ($player_cards as $card) {
-        if ($chain_start === null) {
-          $chain_start = $card;
-        } elseif ($card - $chain_start > 1) {
-          // Insert chain
-          $this->insertChain($player_id, $chain_start, $card);
-          $chain_start = $card;
-        }
-      }
-
-      // Insert final chain if exists
-      if ($chain_start !== null && $chain_start != end($player_cards)) {
-        $this->insertChain($player_id, $chain_start, end($player_cards));
       }
     }
     // Process locks
@@ -460,6 +464,7 @@ class LockAndChain extends Table
     $sql = "INSERT INTO game_logs (section, message) VALUES ('$escapedSection', '$escapedMessage')";
     self::DbQuery($sql);
   }
+
   public function selectCard($player_id, $card_id)
   {
     self::checkAction('selectCard');
@@ -524,11 +529,12 @@ class LockAndChain extends Table
     });
 
     if (count($active_players) <= 2) {
+      $has_legal_move = 0; // Initialize with 0 (false)
       foreach ($active_players as $player_id => $player) {
-        if (!$this->hasLegalMove($player_id)) {
-          return true;
-        }
+        $has_legal_move |= $this->hasLegalMove($player_id); // Bitwise OR
       }
+      // If no player has a legal move, the game ends
+      return !$has_legal_move;
     }
 
     return false;
@@ -549,7 +555,6 @@ class LockAndChain extends Table
         )
       );
     }
-    $this->gamestate->nextState("endGame");
   }
 
   function gameWinner()

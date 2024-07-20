@@ -16,18 +16,43 @@ class action_lockandchain extends APP_GameAction
   public function selectCard()
   {
     self::setAjaxMode();
+
     // Retrieve the card_id and player_id from the AJAX call
     $card_id = self::getArg("card_id", AT_posint, true);
     $player_id = $this->game->getCurrentPlayerId(); // Get the current player ID
 
-    // Call the selectCard method in your game logic
-    $this->game->selectCard($player_id, $card_id);
+    try {
+      // Get the card details
+      $card = $this->game->getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id AND card_location = 'hand' AND player_id = $player_id");
 
-    // Check if all players have selected a card
-    if ($this->allPlayersHaveSelected()) {
-      $this->game->resolveSelections();
-    } else {
-      $this->game->nextPlayer();
+      if (!$card) {
+        throw new BgaUserException(self::_("You don't have this card in your hand"));
+      }
+
+      // Validate the card play
+      $this->game->validateCardPlay($player_id, $card_id, $card['card_type_arg']);
+
+      // If validation passes, proceed with selection
+      $this->game->selectCard($player_id, $card_id);
+
+      // Check if all players have selected a card
+      if ($this->allPlayersHaveSelected()) {
+        $this->game->resolveSelections();
+      } else {
+        $this->game->nextPlayer();
+      }
+      $this->game->notifyPlayer($player_id, 'selectionSuccess', '', array());
+
+
+    } catch (BgaUserException $e) {
+      $this->game->notifyPlayer(
+        $player_id,
+        'invalidSelection',
+        '',
+        array(
+          'message' => $e->getMessage()
+        )
+      );
     }
 
     self::ajaxResponse();

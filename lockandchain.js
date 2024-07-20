@@ -93,8 +93,14 @@ define([
       console.log("Entering state: " + stateName);
 
       switch (stateName) {
-        case "dummmy":
+        case "playerTurn":
+          if (this.isCurrentPlayerActive()) {
+            dojo.style("confirm_button", "display", "inline-block");
+          } else {
+            dojo.style("confirm_button", "display", "none");
+          }
           break;
+        // ... (other states)
       }
     },
 
@@ -132,7 +138,7 @@ define([
       if (this.checkAction("selectCard", true)) {
         if (selectedCard) {
           var cardId = selectedCard.id.split("_")[2];
-          var playerId = this.player_id; // Retrieve the player_id
+          var playerId = this.player_id;
           this.ajaxcall(
             "/lockandchain/lockandchain/selectCard.html",
             { player_id: playerId, card_id: cardId },
@@ -195,6 +201,8 @@ define([
         }
       }
 
+      dojo.style("confirm_button", "display", "inline-block");
+
       // Refresh the player's hand after resolving selections
       this.ajaxcall(
         "/lockandchain/lockandchain/getPlayerHand.html",
@@ -242,25 +250,46 @@ define([
 
       // Example 1: standard notification handling
       dojo.subscribe("cardPlayed", this, "notif_cardPlayed");
+      dojo.subscribe("selectionSuccess", this, "notif_selectionSuccess");
+
       dojo.subscribe("cardDiscarded", this, "notif_cardDiscarded");
       dojo.subscribe("newCardDrawn", this, "notif_newCardDrawn");
+      dojo.subscribe("invalidSelection", this, "notif_invalidSelection");
+    },
+
+    notif_selectionSuccess: function (notif) {
+      dojo.style("confirm_button", "display", "none");
+    },
+
+    notif_invalidSelection: function (notif) {
+      this.showMessage(_(notif.args.message), "error");
+      // Reset selection if needed
+      if (selectedCard) {
+        dojo.removeClass(selectedCard, "selected");
+        selectedCard = null;
+      }
+      // Note: We don't hide the confirm button here
     },
 
     notif_newCardDrawn: function (notif) {
       console.log("notif_newCardDrawn", notif);
 
-      // Create the new card element
-      var newCardHtml = this.format_block("jstpl_player_card", {
-        CARD_ID: notif.args.card_id,
-        CARD_COLOR: notif.args.card_type,
-        CARD_NUMBER: notif.args.card_type_arg.toString().padStart(2, "0"),
-      });
+      // Check if the card already exists in the player's hand
+      var existingCard = dojo.query("#player_card_" + notif.args.card_id)[0];
+      if (!existingCard) {
+        // Create the new card element only if it doesn't exist
+        var newCardHtml = this.format_block("jstpl_player_card", {
+          CARD_ID: notif.args.card_id,
+          CARD_COLOR: notif.args.card_type,
+          CARD_NUMBER: notif.args.card_type_arg.toString().padStart(2, "0"),
+        });
 
-      // Add the new card to the player's hand
-      dojo.place(newCardHtml, "player_hand_" + this.player_id);
+        // Add the new card to the player's hand
+        dojo.place(newCardHtml, "player_hand_" + this.player_id);
 
-      // Make the new card selectable
-      this.makeCardSelectable(notif.args.card_id);
+        // Make the new card selectable
+        this.makeCardSelectable(notif.args.card_id);
+      }
     },
 
     notif_cardPlayed: function (notif) {
