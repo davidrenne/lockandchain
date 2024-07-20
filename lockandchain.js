@@ -24,6 +24,8 @@ define([
   return declare("bgagame.lockandchain", ebg.core.gamegui, {
     constructor: function () {
       console.log("lockandchain constructor");
+      this.notificationQueue = [];
+      this.isProcessingNotification = false;
     },
 
     setup: function (gamedatas) {
@@ -251,7 +253,8 @@ define([
       // Example 1: standard notification handling
       dojo.subscribe("cardPlayed", this, "notif_cardPlayed");
       dojo.subscribe("selectionSuccess", this, "notif_selectionSuccess");
-
+      dojo.subscribe("cardRevealed", this, "queueNotification");
+      dojo.subscribe("cardRemoved", this, "queueNotification");
       dojo.subscribe("cardDiscarded", this, "notif_cardDiscarded");
       dojo.subscribe("newCardDrawn", this, "notif_newCardDrawn");
       dojo.subscribe("invalidSelection", this, "notif_invalidSelection");
@@ -331,6 +334,98 @@ define([
 
       // Optionally, you can show a message or animation indicating the card was discarded
       this.showMessage(_("Card discarded: ") + notif.args.card_value, "info");
+    },
+
+    queueNotification: function (notif) {
+      this.notificationQueue.push(notif);
+      if (!this.isProcessingNotification) {
+        this.processNextNotification();
+      }
+    },
+
+    processNextNotification: function () {
+      if (this.notificationQueue.length === 0) {
+        this.isProcessingNotification = false;
+        return;
+      }
+
+      this.isProcessingNotification = true;
+      var notif = this.notificationQueue.shift();
+
+      if (notif.type === "cardRevealed") {
+        this.notif_cardRevealed(notif);
+      } else if (notif.type === "cardRemoved") {
+        this.notif_cardRemoved(notif);
+      }
+    },
+
+    notif_cardRevealed: function (notif) {
+      var cardNumber = notif.args.card_number;
+      var newTopCardId = notif.args.new_top_card_id;
+      var newTopPlayerId = notif.args.new_top_player_id;
+      var oldCard = dojo.query("#cell_" + cardNumber + " .player_card")[0];
+
+      // Fade out the old card
+      fx.fadeOut({
+        node: oldCard,
+        duration: 500,
+        onEnd: dojo.hitch(this, function () {
+          // Remove the old card
+          dojo.empty("cell_" + cardNumber);
+
+          // Create the new card
+          var playerColor = this.gamedatas.players[newTopPlayerId].color;
+          var cardHtml = this.format_block("jstpl_player_card", {
+            CARD_ID: newTopCardId,
+            CARD_COLOR: playerColor,
+            CARD_NUMBER: cardNumber.toString().padStart(2, "0"),
+          });
+          var newCard = dojo.place(cardHtml, "cell_" + cardNumber);
+          dojo.style(newCard, "opacity", "0");
+
+          // Fade in the new card
+          fx.fadeIn({
+            node: newCard,
+            duration: 500,
+            onEnd: dojo.hitch(this, function () {
+              // Process the next notification after a short delay
+              setTimeout(dojo.hitch(this, "processNextNotification"), 200);
+            }),
+          }).play();
+        }),
+      }).play();
+    },
+
+    notif_cardRemoved: function (notif) {
+      var cardNumber = notif.args.card_number;
+      var card = dojo.query("#cell_" + cardNumber + " .player_card")[0];
+
+      // Fade out the card
+      fx.fadeOut({
+        node: card,
+        duration: 500,
+        onEnd: dojo.hitch(this, function () {
+          // Remove the card from the UI
+          dojo.empty("cell_" + cardNumber);
+
+          // Optionally, place a placeholder or update the UI to show an empty slot
+          var emptySlot = dojo.place(
+            '<div class="empty-slot"></div>',
+            "cell_" + cardNumber
+          );
+          dojo.style(emptySlot, "opacity", "0");
+
+          // Fade in the empty slot
+          fx.fadeIn({
+            node: emptySlot,
+            duration: 500,
+            onEnd: dojo.hitch(this, function () {
+              // Process the next notification after a short delay
+              setTimeout(dojo.hitch(this, "processNextNotification"), 200);
+            }),
+          }).play();
+        }),
+      }).play();
     },
   });
 });

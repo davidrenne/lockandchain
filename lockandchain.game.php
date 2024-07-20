@@ -127,10 +127,6 @@ class LockAndChain extends Table
         self::DbQuery("DELETE FROM PlayerHands WHERE card_id IN (" . implode(',', $cardCountIds[$card_number]) . ")");
       }
 
-      // Clear selections for the next round
-      self::DbQuery("DELETE FROM PlayerSelections");
-      $this->rebuildChainsAndLocks();
-
       // Draw new cards for all players who played a card
       foreach ($selections as $player_id => $selection) {
         $cards = $this->getCards($player_id, 'deck', 1);
@@ -151,10 +147,24 @@ class LockAndChain extends Table
         }
       }
 
-      $transition = "nextPlayer";
-      if ($this->isGameEnd()) {
-        $transition = "endGame";
+      // Clear selections for the next round
+      self::DbQuery("DELETE FROM PlayerSelections");
+      $this->rebuildChainsAndLocks();
+
+      $players = self::loadPlayersBasicInfos();
+      $knockedOutPlayers = array();
+
+      foreach ($players as $player_id => $player) {
+        if (!$this->playerHasValidMove($player_id)) {
+          $knockedOutPlayers[] = $player_id;
+          $this->knockOutPlayer($player_id);
+        }
       }
+
+      if (!empty($knockedOutPlayers)) {
+        $this->handleKnockedOutPlayers($knockedOutPlayers);
+      }
+
 
       foreach ($cardCounts as $card_number => $player_ids) {
         if (count($player_ids) == 1) {
@@ -177,7 +187,11 @@ class LockAndChain extends Table
       }
 
       // Proceed to the next player or end game
-      $this->gamestate->nextState($transition);
+      if ($this->isGameEnd()) {
+        $this->gamestate->nextState('endGame');
+      } else {
+        $this->gamestate->nextState('nextPlayer');
+      }
       self::DbQuery('COMMIT');
     } catch (Exception $e) {
       self::DbQuery('ROLLBACK');
@@ -192,6 +206,132 @@ class LockAndChain extends Table
       return;
     }
   }
+
+
+  function playerHasValidMove($player_id)
+  {
+    $hand = $this->getPlayerCards($player_id);
+    foreach ($hand as $card) {
+      try {
+        $this->validateCardPlay($player_id, $card['card_id'], $card['card_type_arg']);
+        return true; // If any card can be played, return true
+      } catch (BgaUserException $e) {
+        // This card can't be played, continue checking others
+      }
+    }
+    return false; // If no cards can be played, return false
+  }
+
+  function knockOutPlayer($player_id)
+  {
+    // Remove player's top cards from the board
+    $this->removePlayerTopCards($player_id);
+
+    // Mark player as eliminated in the database
+    self::DbQuery("UPDATE player SET player_eliminated = 1 WHERE player_id = $player_id");
+
+    // Notify all players
+    self::notifyAllPlayers(
+      'playerKnockedOut',
+      clienttranslate('${player_name} has been knocked out!'),
+      array(
+        'player_id' => $player_id,
+        'player_name' => self::getPlayerNameById($player_id)
+      )
+    );
+  }
+
+  function removePlayerTopCards($player_id)
+  {
+    // Start a transaction to ensure data consistency
+    self::DbQuery("START TRANSACTION");
+
+    try {
+      // Get all top cards on the board
+      $topCards = self::getObjectListFromDB("
+            SELECT cp.card_id, cp.card_number, cp.position, c.player_id
+            FROM CardPlacements cp
+            JOIN Cards c ON cp.card_id = c.card_id
+            INNER JOIN (
+                SELECT card_number, MAX(position) as max_position
+                FROM CardPlacements
+                GROUP BY card_number
+            ) top_pos ON cp.card_number = top_pos.card_number AND cp.position = top_pos.max_position
+            ORDER BY cp.card_number
+        ");
+
+      foreach ($topCards as $card) {
+        if ($card['player_id'] == $player_id) {
+          // This top card belongs to the knocked-out player
+          // Get all cards for this card number
+          $cardsToDiscard = self::getObjectListFromDB("
+                    SELECT cp.card_id
+                    FROM CardPlacements cp
+                    WHERE cp.card_number = {$card['card_number']}
+                ");
+
+          foreach ($cardsToDiscard as $discardCard) {
+            // Move the card to the discard pile
+            self::DbQuery("UPDATE Cards SET card_location = 'discard' WHERE card_id = {$discardCard['card_id']}");
+            // Remove this card from CardPlacements
+            self::DbQuery("DELETE FROM CardPlacements WHERE card_id = {$discardCard['card_id']}");
+          }
+
+          // Notify that the position is now empty
+          self::notifyAllPlayers(
+            'cardRemoved',
+            '',
+            array(
+              'card_number' => $card['card_number']
+            )
+          );
+        }
+      }
+
+      // Remove all cards from the knocked-out player's hand
+      self::DbQuery("UPDATE Cards SET card_location = 'discard' WHERE player_id = $player_id AND card_location = 'hand'");
+
+      // Remove all entries from PlayerHands for this player
+      self::DbQuery("DELETE FROM PlayerHands WHERE player_id = $player_id");
+
+      // Commit the transaction
+      self::DbQuery("COMMIT");
+    } catch (Exception $e) {
+      // If there's any error, rollback the changes
+      self::DbQuery("ROLLBACK");
+      throw $e;
+    }
+  }
+  function handleKnockedOutPlayers($knockedOutPlayers)
+  {
+    // Check if the game should end (e.g., only one player left)
+    $activePlayers = self::getObjectListFromDB("SELECT player_id FROM player WHERE player_eliminated = 0");
+
+    if (count($activePlayers) == 1) {
+      // Declare the last active player as the winner
+      $winnerId = $activePlayers[0]['player_id'];
+      $this->declareWinner($winnerId);
+    }
+  }
+
+  function declareWinner($player_id)
+  {
+    // Set the score for the winning player
+    self::DbQuery("UPDATE player SET player_score = 1 WHERE player_id = $player_id");
+
+    // Notify all players about the winner
+    self::notifyAllPlayers(
+      'gameEnd',
+      clienttranslate('${player_name} wins the game!'),
+      array(
+        'player_id' => $player_id,
+        'player_name' => self::getPlayerNameById($player_id)
+      )
+    );
+
+    $this->gamestate->nextState('endGame');
+  }
+
 
   private function initializePlayers($players)
   {
