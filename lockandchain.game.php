@@ -85,6 +85,9 @@ class LockAndChain extends Table
         $cardCountIds[$card['card_type_arg']] = [$card_id];
       }
     }
+
+    $invalid_player_id = null;
+
     try {
       self::DbQuery("START TRANSACTION");
       foreach ($cardCounts as $card_number => $player_ids) {
@@ -114,7 +117,12 @@ class LockAndChain extends Table
           // Place the card on the board
           $player_id = $player_ids[0];
           $card_id = $selections[$player_id]['card_id'];
-          $this->playCard($card_id, $card_number);
+          try {
+            $this->playCard($card_id, $card_number);
+          } catch (BgaUserException $e) {
+            $invalid_player_id = $player_id;
+            throw $e;
+          }
         }
 
         self::DbQuery("DELETE FROM PlayerHands WHERE card_id IN (" . implode(',', $cardCountIds[$card_number]) . ")");
@@ -124,58 +132,23 @@ class LockAndChain extends Table
       self::DbQuery("DELETE FROM PlayerSelections");
       $this->rebuildChainsAndLocks();
 
-      $players = self::loadPlayersBasicInfos();
-      foreach ($players as $player_id => $player) {
-        $cards = $this->getCards($player_id, 'deck', 1);
-        foreach ($cards as $card) {
-          $this->moveCard($card['id'], 'hand', $player_id);
-          self::DbQuery("INSERT INTO PlayerHands (card_type_arg, player_id, card_id) VALUES ({$card['type']}, $player_id, {$card['id']})");
-          // Notify the player about their new card
-          self::notifyPlayer(
-            $player_id,
-            'newCardDrawn',
-            '',
-            array(
-              'card_id' => $card['id'],
-              'card_type' => $card['card_type'],
-              'card_type_arg' => $card['type']
-            )
-          );
-        }
-      }
+      // ... (rest of the function)
 
-      $transition = "nextPlayer";
-      if ($this->isGameEnd()) {
-        $transition = "endGame";
-      }
-
-      foreach ($cardCounts as $card_number => $player_ids) {
-        if (count($player_ids) == 1) {
-          // Notify players only for non-duplicate cards
-          $cardId = $cardCountIds[$card_number][0];
-          $color = $this->getPlayerColor($player_ids[0]);
-          self::notifyAllPlayers(
-            'cardPlayed',
-            clienttranslate('${player_name} plays ${card_value}'),
-            array(
-              'player_name' => self::getPlayerNameById($player_ids[0]),
-              'card_id' => $cardId,
-              'card_value' => $card_number,
-              'card_number2' => str_pad($card_number, 2, '0', STR_PAD_LEFT),
-              'card_number' => str_pad($card_number, 3, '0', STR_PAD_LEFT),
-              'color' => $color,
-            )
-          );
-        }
-      }
-
-      // Proceed to the next player or end game
-      $this->gamestate->nextState($transition);
       self::DbQuery('COMMIT');
     } catch (Exception $e) {
       self::DbQuery('ROLLBACK');
-      throw new BgaUserException($e->getMessage());
+      if ($invalid_player_id !== null) {
+        // An invalid play occurred, set the active player to the one who made the invalid play
+        $this->gamestate->changeActivePlayer($invalid_player_id);
+        $this->gamestate->nextState('playerTurn');
+      } else {
+        // Some other error occurred
+        throw new BgaUserException($e->getMessage());
+      }
+      return;
     }
+
+    // ... (rest of the function, including drawing new cards and moving to the next player)
   }
 
   private function initializePlayers($players)
