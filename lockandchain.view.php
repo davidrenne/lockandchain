@@ -19,9 +19,8 @@ class view_lockandchain_lockandchain extends game_view
       $topCard = self::getObjectFromDB("
         SELECT cp.*, c.card_type as card_color
         FROM CardPlacements cp
-        LEFT JOIN Cards c ON cp.card_id = c.card_id
+        INNER JOIN Cards c ON cp.card_id = c.card_id AND c.card_location = 'board'
         WHERE cp.card_number = $i
-        AND c.card_location = 'board'
         ORDER BY cp.position DESC
         LIMIT 1
       ");

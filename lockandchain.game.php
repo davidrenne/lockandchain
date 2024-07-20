@@ -90,6 +90,7 @@ class LockAndChain extends Table
 
     try {
       self::DbQuery("START TRANSACTION");
+
       foreach ($cardCounts as $card_number => $player_ids) {
         if (count($player_ids) > 1) {
           // Discard duplicate cards
@@ -109,8 +110,6 @@ class LockAndChain extends Table
               );
             }
             self::DbQuery("UPDATE Cards SET card_location = 'discard' WHERE card_id = $card_id");
-
-            // Remove the card from CardPlacements if it exists
             self::DbQuery("DELETE FROM CardPlacements WHERE card_id = $card_id");
           }
         } else {
@@ -132,8 +131,53 @@ class LockAndChain extends Table
       self::DbQuery("DELETE FROM PlayerSelections");
       $this->rebuildChainsAndLocks();
 
-      // ... (rest of the function)
+      // Draw new cards for all players who played a card
+      foreach ($selections as $player_id => $selection) {
+        $cards = $this->getCards($player_id, 'deck', 1);
+        foreach ($cards as $card) {
+          $this->moveCard($card['id'], 'hand', $player_id);
+          self::DbQuery("INSERT INTO PlayerHands (card_type_arg, player_id, card_id) VALUES ({$card['type']}, $player_id, {$card['id']})");
+          // Notify the player about their new card
+          self::notifyPlayer(
+            $player_id,
+            'newCardDrawn',
+            '',
+            array(
+              'card_id' => $card['id'],
+              'card_type' => $card['card_type'],
+              'card_type_arg' => $card['type']
+            )
+          );
+        }
+      }
 
+      $transition = "nextPlayer";
+      if ($this->isGameEnd()) {
+        $transition = "endGame";
+      }
+
+      foreach ($cardCounts as $card_number => $player_ids) {
+        if (count($player_ids) == 1) {
+          // Notify players only for non-duplicate cards
+          $cardId = $cardCountIds[$card_number][0];
+          $color = $this->getPlayerColor($player_ids[0]);
+          self::notifyAllPlayers(
+            'cardPlayed',
+            clienttranslate('${player_name} plays ${card_value}'),
+            array(
+              'player_name' => self::getPlayerNameById($player_ids[0]),
+              'card_id' => $cardId,
+              'card_value' => $card_number,
+              'card_number2' => str_pad($card_number, 2, '0', STR_PAD_LEFT),
+              'card_number' => str_pad($card_number, 3, '0', STR_PAD_LEFT),
+              'color' => $color,
+            )
+          );
+        }
+      }
+
+      // Proceed to the next player or end game
+      $this->gamestate->nextState($transition);
       self::DbQuery('COMMIT');
     } catch (Exception $e) {
       self::DbQuery('ROLLBACK');
@@ -147,8 +191,6 @@ class LockAndChain extends Table
       }
       return;
     }
-
-    // ... (rest of the function, including drawing new cards and moving to the next player)
   }
 
   private function initializePlayers($players)
