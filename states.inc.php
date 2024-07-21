@@ -37,6 +37,7 @@ $machinestates = array(
 
   ST_PLAYER_TURN => array(
     "name" => "playerTurn",
+    "args" => "argPlayerTurn",
     "description" => clienttranslate('${actplayer} must play a card'),
     "descriptionmyturn" => clienttranslate('${you} must play a card'),
     "type" => "activeplayer",

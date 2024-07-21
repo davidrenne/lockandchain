@@ -1,9 +1,14 @@
 <?php
 
+require_once ('lockandchain.game.tests.php');
+require_once ('lockandchain.game.cards.php');
 require_once (APP_GAMEMODULE_PATH . 'module/table/table.game.php');
 
 class LockAndChain extends Table
 {
+  private ?LockAndChainTestScenarios $testScenarios = null;
+  private ?CardManager $cardManager = null;
+
   function __construct()
   {
     parent::__construct();
@@ -21,6 +26,18 @@ class LockAndChain extends Table
     return "lockandchain";
   }
 
+  private function initComponents()
+  {
+    if ($this->testScenarios === null) {
+      $this->testScenarios = new LockAndChainTestScenarios($this);
+    }
+    if ($this->cardManager === null) {
+      $this->cardManager = new CardManager($this);
+    }
+  }
+
+
+
   protected function setupNewGame($players, $options = array())
   {
     // Start a database transaction
@@ -30,14 +47,19 @@ class LockAndChain extends Table
       // Initialize players
       $this->initializePlayers($players);
 
+      // Initialize components here
+      $this->initComponents();
+
       // Initialize decks and cards
       $this->initDecks();
 
+      // Randomly determine the starting hands based on inserted decks
       $this->dealInitialHands($players);
 
       // Set up game state
       $this->setGameStateInitialValue('currentTurn', 0);
 
+      // Initialize the first player
       $this->activeNextPlayer();
 
       // Commit the transaction
@@ -65,6 +87,11 @@ class LockAndChain extends Table
     $this->gamestate->nextState("nextPlayer");
   }
 
+
+  public function bgaGameEnded(): bool
+  {
+    return $this->gamestate->state_id() == ST_END_GAME;
+  }
 
   function stResolveSelections()
   {
@@ -119,6 +146,9 @@ class LockAndChain extends Table
           try {
             $this->playCard($card_id, $card_number);
           } catch (BgaUserException $e) {
+            if ($this->bgaGameEnded()) {
+              return;
+            }
             $invalid_player_id = $player_id;
             throw $e;
           }
@@ -410,31 +440,24 @@ class LockAndChain extends Table
       }
     }
   }
+
   private function initDecks()
   {
-    // Each player gets a deck of cards 1-36
-    $cards = array();
-    $players = $this->loadPlayersBasicInfos();
-    foreach ($players as $player_id => $player) {
-      for ($i = 1; $i <= 36; $i++) {
-        $cards[] = array(
-          'card_type' => $player['player_color'],
-          'card_type_arg' => $i,
-          'card_location' => 'deck',
-          'player_id' => $player['player_id']
-        );
-      }
-    }
-
-    // Insert cards into Cards table
-    foreach ($cards as $card) {
-      $sql = "INSERT INTO Cards (card_type, card_type_arg, card_location, player_id, card_location_arg) 
-                VALUES ('{$card['card_type']}', {$card['card_type_arg']}, '{$card['card_location']}', {$card['player_id']}, 0)";
-      self::DbQuery($sql);
-    }
+    // Standard deck initialization
+    $this->cardManager->standardHandDeal($this->loadPlayersBasicInfos());
 
     // Shuffle the deck
     $this->shuffleDeck();
+
+    // Comment out the above line and uncomment one of the following lines to run a test scenario:
+
+    //$this->testScenarios->testDiscardedChainBreakLockCreate();
+    //$this->testScenarios->testRemovePilesAfterPlayerKnockOut();
+    //$this->testScenarios->testAbsoluteTie();
+    //$this->testScenarios->testTieButWinner();
+    //$this->testScenarios->testQuick4Player();
+    $this->testScenarios->testQuickLock();
+
   }
 
 
@@ -444,14 +467,14 @@ class LockAndChain extends Table
     // Check if the card belongs to the player
     $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id AND card_location = 'hand' AND player_id = $player_id");
     if (!$card) {
-      throw new BgaUserException(self::_("You don't have this card in your hand"));
+      throw new BgaUserException(clienttranslate("You don't have this card in your hand"));
     }
 
     // Check for chains
     $chains = self::getObjectListFromDB("SELECT * FROM Chains WHERE player_id != $player_id");
     foreach ($chains as $chain) {
       if ($card_number > $chain['start_position'] && $card_number < $chain['end_position']) {
-        throw new BgaUserException(self::_("You cannot play within another player's chain"));
+        throw new BgaUserException(clienttranslate("You cannot play within another player's chain"));
       }
     }
 
@@ -459,7 +482,7 @@ class LockAndChain extends Table
     $locks = self::getObjectListFromDB("SELECT * FROM Locks WHERE player_id != $player_id");
     foreach ($locks as $lock) {
       if ($card_number >= $lock['start_position'] && $card_number <= $lock['end_position']) {
-        throw new BgaUserException(self::_("You cannot play on a locked position"));
+        throw new BgaUserException(clienttranslate("You cannot play on a locked position"));
       }
     }
 
@@ -536,19 +559,40 @@ class LockAndChain extends Table
     }
   }
 
+
+  public function getBoardStateArg(): array
+  {
+    return self::getObjectListFromDB($this->getBoardStateSQL());
+  }
+  public function getLocksArg(): array
+  {
+    return self::getObjectListFromDB("
+        SELECT l.player_id, l.start_position, l.end_position, c.card_id, c.card_type AS color, cp.card_number
+        FROM Locks l
+        INNER JOIN CardPlacements cp ON l.start_position <= cp.card_number AND l.end_position >= cp.card_number
+        INNER JOIN Cards c ON cp.card_id = c.card_id
+    ");
+  }
+
+
+  private function getBoardStateSQL()
+  {
+    return "
+      SELECT c.card_id, cp.card_number, cp.player_id, cp.position, c.card_type AS color
+      FROM CardPlacements cp
+      INNER JOIN (
+          SELECT card_number, MAX(position) as max_position
+          FROM CardPlacements
+          GROUP BY card_number
+      ) top_cards ON cp.card_number = top_cards.card_number AND cp.position = top_cards.max_position
+      INNER JOIN Cards c ON cp.card_id = c.card_id
+      ORDER BY cp.card_number;
+    ";
+  }
   private function getBoardState()
   {
     $boardState = [];
-    $placements = self::getObjectListFromDB("
-        SELECT cp.card_number, cp.player_id, cp.position
-        FROM CardPlacements cp
-        INNER JOIN (
-            SELECT card_number, MAX(position) as max_position
-            FROM CardPlacements
-            GROUP BY card_number
-        ) top_cards ON cp.card_number = top_cards.card_number AND cp.position = top_cards.max_position
-        ORDER BY cp.card_number
-    ");
+    $placements = self::getObjectListFromDB($this->getBoardStateSQL());
 
     foreach ($placements as $placement) {
       $boardState[$placement['card_number']] = $placement['player_id'];
@@ -574,7 +618,7 @@ class LockAndChain extends Table
   {
     $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id");
     if (!$card) {
-      throw new BgaUserException(self::_("Cannot find card in playCard for card_id $card_id"));
+      throw new BgaUserException(clienttranslate("Cannot find card in playCard for card_id $card_id"));
     }
 
     $player_id = $card["player_id"];
@@ -638,7 +682,7 @@ class LockAndChain extends Table
     // Validate that the card belongs to the player
     $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id AND card_location = 'hand' AND player_id = $player_id");
     if (!$card) {
-      throw new BgaUserException(self::_("You don't have this card in your hand"));
+      throw new BgaUserException(clienttranslate("You don't have this card in your hand"));
     }
 
     // Check if the player has already made a selection
@@ -660,18 +704,6 @@ class LockAndChain extends Table
         'player_name' => self::getActivePlayerName(),
       )
     );
-
-    // Check if all players have made their selections
-    $players_count = self::getPlayersNumber();
-    $selections_count = self::getUniqueValueFromDB("SELECT COUNT(*) FROM PlayerSelections");
-
-    if ($selections_count == $players_count) {
-      // All players have made their selections, move to the resolution phase
-      $this->gamestate->nextState('resolveSelections');
-    } else {
-      // If not all players have selected, go to next person
-      $this->gamestate->nextState('nextPlayer');
-    }
   }
 
   function stNextPlayer()
@@ -815,6 +847,14 @@ class LockAndChain extends Table
   {
     $sql = "UPDATE Cards SET card_location='$location' WHERE card_id=$card_id";
     self::DbQuery($sql);
+  }
+
+  public function argPlayerTurn(): array
+  {
+    return [
+      'boardState' => $this->getBoardStateArg(),
+      'locks' => $this->getLocksArg(),
+    ];
   }
 
   public function getPlayerCards($player_id)

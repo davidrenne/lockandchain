@@ -14,6 +14,33 @@ var selectedCard = null;
 var jstpl_confirm_button =
   '<button id="confirm_button" class="bgabutton bgabutton_blue">Confirm Selection</button>';
 
+let animationQueue = [];
+function applyLockAnimation(newCards) {
+  newCards.forEach((card) => {
+    // Ensure card_number is defined and handle potential undefined values
+    if (card.card_number !== undefined) {
+      // Extract the card_number and pad it to 2 digits
+      let cardNumber = card.card_number.toString().padStart(3, "0");
+
+      // Store the card in the animation queue
+      animationQueue.push(cardNumber);
+      console.log("animationQueue", animationQueue);
+      // Get the parent div with id cell_${cardNumber}
+      let cellElement = document.getElementById(`cell_${cardNumber}`);
+      if (cellElement) {
+        // Get the image element within the cell
+        let imageElement = cellElement.querySelector("img");
+        if (imageElement && !imageElement.classList.contains("locked")) {
+          // Apply the locked class and rotation animation
+          imageElement.classList.add("locked", "rotate-and-scale");
+        }
+      }
+    } else {
+      console.error("card_number is undefined for card:", card);
+    }
+  });
+}
+
 define([
   "dojo",
   "dojo/_base/declare",
@@ -25,6 +52,8 @@ define([
   "dojo/dom-construct",
 ], function (dojo, declare) {
   return declare("bgagame.lockandchain", ebg.core.gamegui, {
+    currentLocks: [], // Maintain the current lock state
+
     constructor: function () {
       console.log("lockandchain constructor");
       this.notificationQueue = [];
@@ -94,19 +123,55 @@ define([
       );
     },
 
-    onEnteringState: function (stateName, args) {
-      console.log("Entering state: " + stateName);
-
-      switch (stateName) {
-        case "playerTurn":
-          if (this.isCurrentPlayerActive()) {
-            dojo.style("confirm_button", "display", "inline-block");
-          } else {
-            dojo.style("confirm_button", "display", "none");
-          }
-          break;
-        // ... (other states)
+    updateBoardState: function (newLockedCards) {
+      console.error("newLockedCards-->>", newLockedCards);
+      var newCardsAdded = this.checkForNewCards(newLockedCards);
+      if (newCardsAdded.length > 0) {
+        applyLockAnimation(newCardsAdded);
       }
+      // Update the current lock state
+      this.currentLocks = newLockedCards.slice();
+    },
+
+    findLocks: function (cards) {
+      var lockedCards = [];
+      var currentLock = [];
+
+      for (var i = 0; i < cards.length; i++) {
+        if (currentLock.length === 0) {
+          currentLock.push(cards[i]);
+        } else {
+          if (cards[i].color === currentLock[currentLock.length - 1].color) {
+            currentLock.push(cards[i]);
+          } else {
+            if (currentLock.length >= 3) {
+              lockedCards = lockedCards.concat(currentLock);
+            }
+            currentLock = [cards[i]]; // Reset the current lock with the new color
+          }
+        }
+      }
+
+      // Check the last sequence
+      if (currentLock.length >= 3) {
+        lockedCards = lockedCards.concat(currentLock);
+      }
+
+      return lockedCards;
+    },
+
+    checkForNewCards: function (newLockedCards) {
+      var newCardsAdded = [];
+      newLockedCards.forEach((newLock) => {
+        var isNew = this.currentLocks.every(
+          (currentLock) => currentLock.card_id !== newLock.card_id
+        );
+        if (isNew || this.currentLocks.length === 0) {
+          newCardsAdded.push(newLock);
+        }
+      });
+
+      return newCardsAdded;
     },
 
     onLeavingState: function (stateName) {
@@ -236,7 +301,13 @@ define([
       console.log("Entering state: " + stateName);
 
       switch (stateName) {
-        case "dummmy":
+        case "playerTurn":
+          this.updateBoardState(args.args.locks);
+          if (this.isCurrentPlayerActive()) {
+            dojo.style("confirm_button", "display", "inline-block");
+          } else {
+            dojo.style("confirm_button", "display", "none");
+          }
           break;
       }
     },
@@ -280,6 +351,7 @@ define([
     notif_newCardDrawn: function (notif) {
       console.log("notif_newCardDrawn", notif);
 
+      alert(notif.args.card_id);
       // Check if the card already exists in the player's hand
       var existingCard = dojo.query("#player_card_" + notif.args.card_id)[0];
       if (!existingCard) {
@@ -298,13 +370,28 @@ define([
       }
     },
 
+    reapplyAnimations: function () {
+      console.log("reapplyAnimations animationQueue", animationQueue);
+      animationQueue.forEach((cardNumber) => {
+        let cellElement = document.getElementById(`cell_${cardNumber}`);
+        console.log("cellElement", cellElement);
+        if (cellElement) {
+          let imageElement = cellElement.querySelector("img");
+          console.log(cellElement, imageElement, imageElement.classList);
+          if (imageElement && !imageElement.classList.contains("locked")) {
+            imageElement.classList.add("locked", "rotate-and-scale");
+          }
+        }
+      });
+    },
+
     notif_cardPlayed: function (notif) {
       console.log("notif_cardPlayed");
       console.log(notif);
       var card_number2 = notif.args.card_number2;
       var card_number = notif.args.card_number;
       var color = notif.args.color;
-      dojo.empty("cell_" + card_number); // Clear existing content
+      // dojo.empty("cell_" + card_number); // Clear existing content
       dojo.place(
         '<div class="card_container">' +
           '<img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_' +
@@ -323,6 +410,7 @@ define([
       if (card_element) {
         dojo.destroy(card_element);
       }
+      this.reapplyAnimations();
     },
 
     notif_cardDiscarded: function (notif) {

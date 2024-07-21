@@ -26,7 +26,7 @@ class action_lockandchain extends APP_GameAction
       $card = $this->game->getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id AND card_location = 'hand' AND player_id = $player_id");
 
       if (!$card) {
-        throw new BgaUserException(self::_("You don't have this card in your hand"));
+        throw new BgaUserException(clienttranslate("You don't have this card in your hand"));
       }
 
       // Validate the card play
@@ -42,8 +42,6 @@ class action_lockandchain extends APP_GameAction
         $this->game->nextPlayer();
       }
       $this->game->notifyPlayer($player_id, 'selectionSuccess', '', array());
-
-
     } catch (BgaUserException $e) {
       $this->game->notifyPlayer(
         $player_id,
