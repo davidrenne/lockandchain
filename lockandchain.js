@@ -20,6 +20,9 @@ define([
   "ebg/core/gamegui",
   "ebg/counter",
   "dojo/string",
+  "dojo/fx",
+  "dojo/dom-style",
+  "dojo/dom-construct",
 ], function (dojo, declare) {
   return declare("bgagame.lockandchain", ebg.core.gamegui, {
     constructor: function () {
@@ -366,34 +369,38 @@ define([
       var oldCard = dojo.query("#cell_" + cardNumber + " .player_card")[0];
 
       // Fade out the old card
-      fx.fadeOut({
-        node: oldCard,
-        duration: 500,
-        onEnd: dojo.hitch(this, function () {
-          // Remove the old card
-          dojo.empty("cell_" + cardNumber);
+      dojo
+        .fadeOut({
+          node: oldCard,
+          duration: 500,
+          onEnd: dojo.hitch(this, function () {
+            // Remove the old card
+            dojo.empty("cell_" + cardNumber);
 
-          // Create the new card
-          var playerColor = this.gamedatas.players[newTopPlayerId].color;
-          var cardHtml = this.format_block("jstpl_player_card", {
-            CARD_ID: newTopCardId,
-            CARD_COLOR: playerColor,
-            CARD_NUMBER: cardNumber.toString().padStart(2, "0"),
-          });
-          var newCard = dojo.place(cardHtml, "cell_" + cardNumber);
-          dojo.style(newCard, "opacity", "0");
+            // Create the new card
+            var playerColor = this.gamedatas.players[newTopPlayerId].color;
+            var cardHtml = this.format_block("jstpl_player_card", {
+              CARD_ID: newTopCardId,
+              CARD_COLOR: playerColor,
+              CARD_NUMBER: cardNumber.toString().padStart(2, "0"),
+            });
+            var newCard = dojo.place(cardHtml, "cell_" + cardNumber);
+            dojo.style(newCard, "opacity", "0");
 
-          // Fade in the new card
-          fx.fadeIn({
-            node: newCard,
-            duration: 500,
-            onEnd: dojo.hitch(this, function () {
-              // Process the next notification after a short delay
-              setTimeout(dojo.hitch(this, "processNextNotification"), 200);
-            }),
-          }).play();
-        }),
-      }).play();
+            // Fade in the new card
+            dojo
+              .fadeIn({
+                node: newCard,
+                duration: 500,
+                onEnd: dojo.hitch(this, function () {
+                  // Process the next notification after a short delay
+                  setTimeout(dojo.hitch(this, "processNextNotification"), 200);
+                }),
+              })
+              .play();
+          }),
+        })
+        .play();
     },
 
     notif_cardRemoved: function (notif) {
@@ -401,31 +408,35 @@ define([
       var card = dojo.query("#cell_" + cardNumber + " .player_card")[0];
 
       // Fade out the card
-      fx.fadeOut({
-        node: card,
-        duration: 500,
-        onEnd: dojo.hitch(this, function () {
-          // Remove the card from the UI
-          dojo.empty("cell_" + cardNumber);
+      dojo
+        .fadeOut({
+          node: card,
+          duration: 500,
+          onEnd: dojo.hitch(this, function () {
+            // Remove the card from the UI
+            dojo.empty("cell_" + cardNumber);
 
-          // Optionally, place a placeholder or update the UI to show an empty slot
-          var emptySlot = dojo.place(
-            '<div class="empty-slot"></div>',
-            "cell_" + cardNumber
-          );
-          dojo.style(emptySlot, "opacity", "0");
+            // Optionally, place a placeholder or update the UI to show an empty slot
+            var emptySlot = dojo.place(
+              '<div class="empty-slot"></div>',
+              "cell_" + cardNumber
+            );
+            dojo.style(emptySlot, "opacity", "0");
 
-          // Fade in the empty slot
-          fx.fadeIn({
-            node: emptySlot,
-            duration: 500,
-            onEnd: dojo.hitch(this, function () {
-              // Process the next notification after a short delay
-              setTimeout(dojo.hitch(this, "processNextNotification"), 200);
-            }),
-          }).play();
-        }),
-      }).play();
+            // Fade in the empty slot
+            dojo
+              .fadeIn({
+                node: emptySlot,
+                duration: 500,
+                onEnd: dojo.hitch(this, function () {
+                  // Process the next notification after a short delay
+                  setTimeout(dojo.hitch(this, "processNextNotification"), 200);
+                }),
+              })
+              .play();
+          }),
+        })
+        .play();
     },
   });
 });

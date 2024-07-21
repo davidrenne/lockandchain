@@ -157,14 +157,25 @@ class LockAndChain extends Table
       foreach ($players as $player_id => $player) {
         if (!$this->playerHasValidMove($player_id)) {
           $knockedOutPlayers[] = $player_id;
-          $this->knockOutPlayer($player_id);
         }
       }
 
-      if (!empty($knockedOutPlayers)) {
-        $this->handleKnockedOutPlayers($knockedOutPlayers);
+      if (count($knockedOutPlayers) == count($players)) {
+        // All players are knocked out
+        $this->handleAllPlayersKnockedOut();
+      } else if (!empty($knockedOutPlayers)) {
+        foreach ($knockedOutPlayers as $player_id) {
+          $this->knockOutPlayer($player_id);
+        }
+        if ($this->isGameEnd()) {
+          $this->gamestate->nextState('endGame');
+        } else {
+          $this->gamestate->nextState('nextPlayer');
+        }
+      } else {
+        // No players knocked out, continue to next player
+        $this->gamestate->nextState('nextPlayer');
       }
-
 
       foreach ($cardCounts as $card_number => $player_ids) {
         if (count($player_ids) == 1) {
@@ -186,12 +197,6 @@ class LockAndChain extends Table
         }
       }
 
-      // Proceed to the next player or end game
-      if ($this->isGameEnd()) {
-        $this->gamestate->nextState('endGame');
-      } else {
-        $this->gamestate->nextState('nextPlayer');
-      }
       self::DbQuery('COMMIT');
     } catch (Exception $e) {
       self::DbQuery('ROLLBACK');
@@ -207,6 +212,53 @@ class LockAndChain extends Table
     }
   }
 
+
+  function handleAllPlayersKnockedOut()
+  {
+    $lockedCardCounts = $this->getLockedCardCounts();
+    $maxLockedCards = max($lockedCardCounts);
+    $winners = array_keys($lockedCardCounts, $maxLockedCards);
+
+    if (count($winners) == 1) {
+      // One clear winner
+      $this->declareWinner($winners[0]);
+    } else {
+      // Tie between players with the most locked cards
+      $this->declareTie($winners);
+    }
+  }
+
+  function getLockedCardCounts()
+  {
+    $counts = array();
+    $players = self::loadPlayersBasicInfos();
+    foreach ($players as $player_id => $player) {
+      $lockedCards = self::getObjectListFromDB(
+        "SELECT COUNT(*) as count FROM Locks WHERE player_id = $player_id"
+      );
+      $counts[$player_id] = $lockedCards[0]['count'];
+    }
+    return $counts;
+  }
+
+  function declareTie($winners)
+  {
+    $winnerNames = array_map(array($this, 'getPlayerNameById'), $winners);
+
+    // Set the score for the tied players
+    self::DbQuery("UPDATE player SET player_score = 1 WHERE player_id IN (" . implode(',', $winners) . ")");
+
+    // Notify all players about the tie
+    self::notifyAllPlayers(
+      'gameEnd',
+      clienttranslate('The game ends in a tie between ${player_names}!'),
+      array(
+        'player_names' => implode(', ', $winnerNames)
+      )
+    );
+
+    $this->gamestate->nextState('endGame');
+  }
 
   function playerHasValidMove($player_id)
   {
@@ -413,17 +465,80 @@ class LockAndChain extends Table
 
     // The move is valid if we've reached this point
   }
-
   private function rebuildChainsAndLocks()
   {
     // Clear existing chains and locks
     self::DbQuery("DELETE FROM Chains");
     self::DbQuery("DELETE FROM Locks");
 
-    $players = self::loadPlayersBasicInfos();
-    $boardState = array();
+    $boardState = $this->getBoardState();
+    $this->customLog("boardState", json_encode($boardState));
 
-    // Build the current board state, ordered by card number
+    $players = self::loadPlayersBasicInfos();
+
+    foreach ($players as $player_id => $player) {
+      $this->customLog("Processing player", $player_id);
+
+      $playerCards = [];
+      $lockStart = null;
+
+      // Collect all cards for this player
+      for ($i = 1; $i <= 36; $i++) {
+        if (isset($boardState[$i]) && $boardState[$i] == $player_id) {
+          $playerCards[] = $i;
+        }
+      }
+
+      // Process chains and locks
+      $chainStart = null;
+      for ($i = 0; $i < count($playerCards); $i++) {
+        $currentCard = $playerCards[$i];
+
+        if ($chainStart === null) {
+          $chainStart = $currentCard;
+        }
+
+        // Check if the chain should end
+        $endChain = false;
+        if ($i == count($playerCards) - 1) {
+          $endChain = true;
+        } else {
+          $nextCard = $playerCards[$i + 1];
+          for ($j = $currentCard + 1; $j < $nextCard; $j++) {
+            if (isset($boardState[$j]) && $boardState[$j] != $player_id) {
+              $endChain = true;
+              break;
+            }
+          }
+        }
+
+        if ($endChain) {
+          $this->insertChain($player_id, $chainStart, $currentCard);
+          $chainStart = null;
+        }
+
+        // Check for locks
+        if ($i >= 2 && $currentCard == $playerCards[$i - 1] + 1 && $playerCards[$i - 1] == $playerCards[$i - 2] + 1) {
+          if ($lockStart === null) {
+            $lockStart = $playerCards[$i - 2];
+          }
+          if ($i == count($playerCards) - 1 || $playerCards[$i + 1] != $currentCard + 1) {
+            $this->insertLock($player_id, $lockStart, $currentCard);
+            $lockStart = null;
+          }
+        } else {
+          if ($lockStart !== null) {
+            $this->insertLock($player_id, $lockStart, $playerCards[$i - 1]);
+            $lockStart = null;
+          }
+        }
+      }
+    }
+  }
+
+  private function getBoardState()
+  {
+    $boardState = [];
     $placements = self::getObjectListFromDB("
         SELECT cp.card_number, cp.player_id, cp.position
         FROM CardPlacements cp
@@ -439,59 +554,7 @@ class LockAndChain extends Table
       $boardState[$placement['card_number']] = $placement['player_id'];
     }
 
-    $this->customLog("boardState", $boardState);
-
-    // Process chains and locks for each player
-    foreach ($players as $player_id => $player) {
-      $chain_start = null;
-      $last_card = null;
-      $consecutive_cards = array();
-
-      for ($i = 1; $i <= 36; $i++) {
-        if (isset($boardState[$i]) && $boardState[$i] == $player_id) {
-          if ($chain_start === null) {
-            $chain_start = $i;
-          }
-          $last_card = $i;
-
-          // Check for consecutive cards (for locks)
-          if (empty($consecutive_cards) || end($consecutive_cards) == $i - 1) {
-            $consecutive_cards[] = $i;
-          } else {
-            // Process lock if we have 3 or more consecutive cards
-            if (count($consecutive_cards) >= 3) {
-              $this->insertLock($player_id, $consecutive_cards[0], end($consecutive_cards));
-            }
-            $consecutive_cards = array($i);
-          }
-        } else {
-          // Check if we need to end a chain
-          if ($chain_start !== null && $last_card !== null && $last_card > $chain_start) {
-            $this->insertChain($player_id, $chain_start, $last_card);
-            $chain_start = null;
-            $last_card = null;
-          }
-
-          // Process lock if we have 3 or more consecutive cards
-          if (count($consecutive_cards) >= 3) {
-            $this->insertLock($player_id, $consecutive_cards[0], end($consecutive_cards));
-          }
-          $consecutive_cards = array();
-        }
-      }
-
-      // Handle any remaining chain at the end
-      if ($chain_start !== null && $last_card !== null && $last_card > $chain_start) {
-        $this->insertChain($player_id, $chain_start, $last_card);
-      }
-
-      // Handle any remaining lock at the end
-      if (count($consecutive_cards) >= 3) {
-        $this->insertLock($player_id, $consecutive_cards[0], end($consecutive_cards));
-      }
-    }
-    // Process locks
-    $this->processLocks($boardState);
+    return $boardState;
   }
 
   private function insertChain($player_id, $start, $end)
@@ -504,43 +567,6 @@ class LockAndChain extends Table
   {
     $this->customLog("Inserting Lock", "player: $player_id, start: $start, end: $end");
     self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
-  }
-
-  private function processLocks($boardState)
-  {
-    $lock_start = null;
-    $lock_length = 0;
-    $current_player = null;
-
-    for ($i = 1; $i <= 36; $i++) {
-      if (isset($boardState[$i])) {
-        if ($current_player === $boardState[$i]) {
-          $lock_length++;
-        } else {
-          if ($lock_length >= 3) {
-            $this->customLog("Inserting Lock", "start: $lock_start, end: " . ($i - 1));
-            self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($current_player, $lock_start, " . ($i - 1) . ")");
-          }
-          $lock_start = $i;
-          $lock_length = 1;
-          $current_player = $boardState[$i];
-        }
-      } else {
-        if ($lock_length >= 3) {
-          $this->customLog("Inserting Lock", "start: $lock_start, end: " . ($i - 1));
-          self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($current_player, $lock_start, " . ($i - 1) . ")");
-        }
-        $lock_start = null;
-        $lock_length = 0;
-        $current_player = null;
-      }
-    }
-
-    // Check for a lock that ends at 36
-    if ($lock_length >= 3) {
-      $this->customLog("Inserting Final Lock", "start: $lock_start, end: 36");
-      self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($current_player, $lock_start, 36)");
-    }
   }
 
   // Handle player actions
@@ -661,23 +687,29 @@ class LockAndChain extends Table
     }
   }
 
+  // function isGameEnd()
+  // {
+  //   $players = self::loadPlayersBasicInfos();
+  //   $active_players = array_filter($players, function ($player) {
+  //     return $player['player_zombie'] == 0;
+  //   });
+
+  //   if (count($active_players) <= 2) {
+  //     $has_legal_move = 0; // Initialize with 0 (false)
+  //     foreach ($active_players as $player_id => $player) {
+  //       $has_legal_move |= $this->hasLegalMove($player_id); // Bitwise OR
+  //     }
+  //     // If no player has a legal move, the game ends
+  //     return !$has_legal_move;
+  //   }
+
+  //   return false;
+  // }
+
   function isGameEnd()
   {
-    $players = self::loadPlayersBasicInfos();
-    $active_players = array_filter($players, function ($player) {
-      return $player['player_zombie'] == 0;
-    });
-
-    if (count($active_players) <= 2) {
-      $has_legal_move = 0; // Initialize with 0 (false)
-      foreach ($active_players as $player_id => $player) {
-        $has_legal_move |= $this->hasLegalMove($player_id); // Bitwise OR
-      }
-      // If no player has a legal move, the game ends
-      return !$has_legal_move;
-    }
-
-    return false;
+    $activePlayers = self::getObjectListFromDB("SELECT player_id FROM player WHERE player_eliminated = 0");
+    return count($activePlayers) <= 1;
   }
 
   // build out stEndGame that calls gameWinner and publishes a winner with that player id in boardgamearena.com
