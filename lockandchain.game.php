@@ -354,17 +354,17 @@ class LockAndChain extends Table
       throw $e;
     }
   }
-  function handleKnockedOutPlayers($knockedOutPlayers)
-  {
-    // Check if the game should end (e.g., only one player left)
-    $activePlayers = self::getObjectListFromDB("SELECT player_id FROM player WHERE player_eliminated = 0");
+  // function handleKnockedOutPlayers($knockedOutPlayers)
+  // {
+  //   // Check if the game should end (e.g., only one player left)
+  //   $activePlayers = self::getObjectListFromDB("SELECT player_id FROM player WHERE player_eliminated = 0");
 
-    if (count($activePlayers) == 1) {
-      // Declare the last active player as the winner
-      $winnerId = $activePlayers[0]['player_id'];
-      $this->declareWinner($winnerId);
-    }
-  }
+  //   if (count($activePlayers) == 1) {
+  //     // Declare the last active player as the winner
+  //     $winnerId = $activePlayers[0]['player_id'];
+  //     $this->declareWinner($winnerId);
+  //   }
+  // }
 
   function declareWinner($player_id)
   {
@@ -679,12 +679,8 @@ class LockAndChain extends Table
     // Proceed to the next player
     $current_player_id = $this->getCurrentPlayerId();
     $next_player_id = self::getPlayerAfter($current_player_id);
-    $this->gamestate->changeActivePlayer($next_player_id); // Set the active player to the current player
-    if ($this->isGameEnd()) {
-      $this->gamestate->nextState("endGame");
-    } else {
-      $this->gamestate->nextState("playerTurn");
-    }
+    $this->gamestate->changeActivePlayer($next_player_id); // Set the active player to the current player 
+    $this->gamestate->nextState("playerTurn");
   }
 
   // function isGameEnd()
