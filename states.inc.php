@@ -20,11 +20,6 @@ if (!defined('ST_RESOLVE_SELECTIONS')) {
   define('ST_RESOLVE_SELECTIONS', 6);
 }
 
-if (!defined('ST_END_GAME')) {
-  define('ST_END_GAME', 99999);
-}
-
-
 $machinestates = array(
   // The initial state. Please do not modify.
   ST_BGA_GAME_SETUP => array(
@@ -42,7 +37,7 @@ $machinestates = array(
     "descriptionmyturn" => clienttranslate('${you} must play a card'),
     "type" => "activeplayer",
     "possibleactions" => array("selectCard", "resolveSelections"),
-    "transitions" => array("resolveSelections" => ST_RESOLVE_SELECTIONS, "nextPlayer" => ST_NEXT_PLAYER)
+    "transitions" => array("resolveSelections" => ST_RESOLVE_SELECTIONS, "nextPlayer" => ST_NEXT_PLAYER, "zombiePass" => 2)
   ),
 
   ST_RESOLVE_SELECTIONS => array(
@@ -51,7 +46,7 @@ $machinestates = array(
     "type" => "game",
     "action" => "stResolveSelections",
     "possibleactions" => array("nextPlayer", "endGame", "playerTurn"),
-    "transitions" => array("nextPlayer" => ST_PLAYER_TURN, "playerTurn" => ST_PLAYER_TURN, "endGame" => ST_END_GAME)
+    "transitions" => array("nextPlayer" => ST_PLAYER_TURN, "playerTurn" => ST_PLAYER_TURN, "endGame" => 99, "zombiePass" => 2)
   ),
 
   ST_NEXT_PLAYER => array(
@@ -62,13 +57,11 @@ $machinestates = array(
     "transitions" => array("playerTurn" => ST_PLAYER_TURN)
   ),
 
-
-  // End game
-  ST_END_GAME => array(
-    "name" => "endGame",
+  99 => array(
+    "name" => "gameEnd",
     "description" => clienttranslate("End of game"),
     "type" => "manager",
-    "actio" => "stEndGame",
-    "transitions" => array("" => ST_BGA_GAME_SETUP)
-  ),
+    "action" => "stGameEnd",
+    "args" => "argGameEnd"
+  )
 );

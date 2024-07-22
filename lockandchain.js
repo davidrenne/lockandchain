@@ -297,11 +297,26 @@ define([
       // and then update the UI based on the result
     },
 
+    updatePlayerColors: function (players) {
+      for (var player_id in players) {
+        var player = players[player_id];
+        // Update the UI to reflect player colors
+        var playerElement = document.getElementById("player_name_" + player_id);
+        if (playerElement) {
+          let aElement = playerElement.querySelector("a");
+          if (aElement) {
+            aElement.style.color = player.color;
+          }
+        }
+      }
+    },
+
     onEnteringState: function (stateName, args) {
       console.log("Entering state: " + stateName);
 
       switch (stateName) {
         case "playerTurn":
+          this.updatePlayerColors(args.args.players);
           this.updateBoardState(args.args.locks);
           if (this.isCurrentPlayerActive()) {
             dojo.style("confirm_button", "display", "inline-block");
@@ -332,6 +347,13 @@ define([
       dojo.subscribe("cardDiscarded", this, "notif_cardDiscarded");
       dojo.subscribe("newCardDrawn", this, "notif_newCardDrawn");
       dojo.subscribe("invalidSelection", this, "notif_invalidSelection");
+      dojo.subscribe("playerEliminated", this, "notif_playerEliminated");
+    },
+
+    notif_playerEliminated: function (notif) {
+      if (notif.args.player_id === this.player_id) {
+        this.showMessage(_("You have been knocked out of the game."), "info");
+      }
     },
 
     notif_selectionSuccess: function (notif) {
@@ -351,7 +373,6 @@ define([
     notif_newCardDrawn: function (notif) {
       console.log("notif_newCardDrawn", notif);
 
-      alert(notif.args.card_id);
       // Check if the card already exists in the player's hand
       var existingCard = dojo.query("#player_card_" + notif.args.card_id)[0];
       if (!existingCard) {
@@ -495,36 +516,46 @@ define([
       var cardNumber = notif.args.card_number;
       var card = dojo.query("#cell_" + cardNumber + " .player_card")[0];
 
-      // Fade out the card
-      dojo
-        .fadeOut({
-          node: card,
-          duration: 500,
-          onEnd: dojo.hitch(this, function () {
-            // Remove the card from the UI
-            dojo.empty("cell_" + cardNumber);
+      if (card) {
+        // Fade out the card
+        dojo
+          .fadeOut({
+            node: card,
+            duration: 500,
+            onEnd: dojo.hitch(this, function () {
+              // Remove the card from the UI
+              dojo.empty("cell_" + cardNumber);
+              dojo.destroy(card);
 
-            // Optionally, place a placeholder or update the UI to show an empty slot
-            var emptySlot = dojo.place(
-              '<div class="empty-slot"></div>',
-              "cell_" + cardNumber
-            );
-            dojo.style(emptySlot, "opacity", "0");
+              // Optionally, place a placeholder or update the UI to show an empty slot
+              var emptySlot = dojo.place(
+                '<div class="empty-slot"></div>',
+                "cell_" + cardNumber
+              );
+              dojo.style(emptySlot, "opacity", "0");
 
-            // Fade in the empty slot
-            dojo
-              .fadeIn({
-                node: emptySlot,
-                duration: 500,
-                onEnd: dojo.hitch(this, function () {
-                  // Process the next notification after a short delay
-                  setTimeout(dojo.hitch(this, "processNextNotification"), 200);
-                }),
-              })
-              .play();
-          }),
-        })
-        .play();
+              // Fade in the empty slot
+              dojo
+                .fadeIn({
+                  node: emptySlot,
+                  duration: 500,
+                  onEnd: dojo.hitch(this, function () {
+                    // Process the next notification after a short delay
+                    setTimeout(
+                      dojo.hitch(this, "processNextNotification"),
+                      200
+                    );
+                  }),
+                })
+                .play();
+            }),
+          })
+          .play();
+      } else {
+        console.error("Card element not found for removal: ", cardNumber);
+        // Ensure to process the next notification if the card element is not found
+        this.processNextNotification();
+      }
     },
   });
 });

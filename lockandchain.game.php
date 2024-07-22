@@ -26,6 +26,11 @@ class LockAndChain extends Table
     return "lockandchain";
   }
 
+  public function getObjectFromDatabase($sql)
+  {
+    return self::getObjectFromDB($sql);
+  }
+
   private function initComponents()
   {
     if ($this->testScenarios === null) {
@@ -40,6 +45,7 @@ class LockAndChain extends Table
 
   protected function setupNewGame($players, $options = array())
   {
+
     // Start a database transaction
     self::DbQuery("START TRANSACTION");
 
@@ -114,6 +120,7 @@ class LockAndChain extends Table
     }
 
     $invalid_player_id = null;
+    $notifications = array(); // Initialize hash map for collecting notifications
 
     try {
       self::DbQuery("START TRANSACTION");
@@ -125,15 +132,11 @@ class LockAndChain extends Table
             $card_id = $selections[$player_id]['card_id'];
             $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id");
             if ($card) {
-              self::notifyAllPlayers(
-                'cardDiscarded',
-                clienttranslate('${player_name}\'s ${color} ${card_value} was discarded from play because another player played the same card.'),
-                array(
-                  'player_name' => self::getPlayerNameById($player_id),
-                  'card_value' => $card['card_type_arg'],
-                  'color' => $card['card_type'],
-                  'card_id' => $card_id,
-                )
+              $notifications[$card_id] = array(
+                'player_name' => self::getPlayerNameById($player_id),
+                'card_value' => $card['card_type_arg'],
+                'color' => $card['card_type'],
+                'card_id' => $card_id,
               );
             }
             self::DbQuery("UPDATE Cards SET card_location = 'discard' WHERE card_id = $card_id");
@@ -227,6 +230,15 @@ class LockAndChain extends Table
         }
       }
 
+      // Send all collected notifications for discarded cards
+      foreach ($notifications as $notification) {
+        self::notifyAllPlayers(
+          'cardDiscarded',
+          clienttranslate('${player_name}\'s ${color} ${card_value} was discarded from play because another player played the same card.'),
+          $notification
+        );
+      }
+
       self::DbQuery('COMMIT');
     } catch (Exception $e) {
       self::DbQuery('ROLLBACK');
@@ -263,8 +275,12 @@ class LockAndChain extends Table
     $counts = array();
     $players = self::loadPlayersBasicInfos();
     foreach ($players as $player_id => $player) {
+      // $lockedCards = self::getObjectListFromDB(
       $lockedCards = self::getObjectListFromDB(
-        "SELECT COUNT(*) as count FROM Locks WHERE player_id = $player_id"
+        "SELECT COUNT(*) as count
+        FROM Locks l
+        INNER JOIN CardPlacements cp ON l.start_position <= cp.card_number AND l.end_position >= cp.card_number
+        INNER JOIN Cards c ON cp.card_id = c.card_id WHERE c.player_id = $player_id"
       );
       $counts[$player_id] = $lockedCards[0]['count'];
     }
@@ -321,6 +337,15 @@ class LockAndChain extends Table
         'player_name' => self::getPlayerNameById($player_id)
       )
     );
+
+    // Notify the player that they have been eliminated
+    self::notifyPlayer(
+      $player_id,
+      'playerEliminated',
+      clienttranslate('You have been knocked out of the game.'),
+      array()
+    );
+
   }
 
   function removePlayerTopCards($player_id)
@@ -417,14 +442,17 @@ class LockAndChain extends Table
 
   private function initializePlayers($players)
   {
+
+    $default_colors = array("red", "blue", "green", "purple");
     $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar) VALUES ";
     $values = array();
     foreach ($players as $player_id => $player) {
-      $color = $this->getPlayerColor($player_id);
+      $color = array_shift($default_colors);
       $values[] = "($player_id, '" . addslashes($player['player_name']) . "', '$color', '', '')";
     }
     $sql .= implode(',', $values);
     self::DbQuery($sql);
+    $this->reattributeColorsBasedOnPreferences($players, array("red", "blue", "green", "purple"));
   }
 
   private function dealInitialHands($players)
@@ -451,16 +479,20 @@ class LockAndChain extends Table
 
     // Comment out the above line and uncomment one of the following lines to run a test scenario:
 
-    //$this->testScenarios->testDiscardedChainBreakLockCreate();
+    // $this->testScenarios->testDiscardedChainBreakLockCreate();
     //$this->testScenarios->testRemovePilesAfterPlayerKnockOut();
     //$this->testScenarios->testAbsoluteTie();
-    //$this->testScenarios->testTieButWinner();
-    //$this->testScenarios->testQuick4Player();
-    $this->testScenarios->testQuickLock();
+    $this->testScenarios->testTieButWinner();
+    // $this->testScenarios->testQuick4Player();
+    // $this->testScenarios->testQuickLock();
 
   }
 
-
+  // public function stGameEndStats()
+  // {
+  //   $this->log->gameEndStats();
+  //   $this->gamestate->nextState('endgame');
+  // }
 
   public function validateCardPlay($player_id, $card_id, $card_number)
   {
@@ -710,10 +742,27 @@ class LockAndChain extends Table
   {
     // Proceed to the next player
     $current_player_id = $this->getCurrentPlayerId();
-    $next_player_id = self::getPlayerAfter($current_player_id);
+    $next_player_id = self::getNextActivePlayer($current_player_id);
     $this->gamestate->changeActivePlayer($next_player_id); // Set the active player to the current player 
     $this->gamestate->nextState("playerTurn");
   }
+
+  private function getNextActivePlayer($current_player_id)
+  {
+    $next_player_id = self::getPlayerAfter($current_player_id);
+    while ($this->isPlayerEliminated($next_player_id)) {
+      $next_player_id = self::getPlayerAfter($next_player_id);
+    }
+    return $next_player_id;
+  }
+
+  private function isPlayerEliminated($player_id)
+  {
+    $sql = "SELECT player_eliminated FROM player WHERE player_id = $player_id";
+    $result = self::getObjectFromDB($sql);
+    return (bool) $result['player_eliminated'];
+  }
+
 
   // function isGameEnd()
   // {
@@ -851,7 +900,12 @@ class LockAndChain extends Table
 
   public function argPlayerTurn(): array
   {
+    $players = self::loadPlayersBasicInfos();
+    foreach ($players as $player_id => $player_info) {
+      $players[$player_id]['color'] = $this->getPlayerColor($player_id);
+    }
     return [
+      'players' => $players,
       'boardState' => $this->getBoardStateArg(),
       'locks' => $this->getLocksArg(),
     ];
@@ -876,17 +930,9 @@ class LockAndChain extends Table
   // Define the missing getPlayerColor method
   private function getPlayerColor($player_id)
   {
-    // You need to define your player colors here
-    // For example, return a color based on the player's ID or other logic
-    $colors = array(
-      1 => 'blue',   // Blue
-      2 => 'green',  // Green
-      3 => 'purple', // Purple
-      4 => 'red'     // Red
-    );
-
-    return $colors[($player_id % 4) + 1];
+    $sql = "SELECT player_color FROM player WHERE player_id = $player_id";
+    $result = self::getObjectFromDB($sql);
+    return $result['player_color'];
   }
 
-  // Other necessary methods...
 }
