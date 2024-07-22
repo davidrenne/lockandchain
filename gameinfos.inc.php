@@ -12,6 +12,7 @@
 
 $gameinfos = array(
 
+  'year' => 2024,
   // Name of the game in English (will serve as the basis for translation) 
   'game_name' => "My Great Game",
 
@@ -77,7 +78,7 @@ $gameinfos = array(
   'language_dependency' => false,
 
   // Colors attributed to players
-  'player_colors' => array("ff0000", "800080", "0000ff", "008000"),
+  'player_colors' => array("red", "blue", "green", "purple"),
 
   // Favorite colors support : if set to "true", support attribution of favorite colors based on player's preferences (see reattributeColorsBasedOnPreferences PHP method)
 // NB: this parameter is used only to flag games supporting this feature; you must use (or not use) reattributeColorsBasedOnPreferences PHP method to actually enable or disable the feature.
@@ -98,6 +99,7 @@ $gameinfos = array(
     'min' => 740,
   ),
 
+  'tags' => array(22),
 
   //////// BGA SANDBOX ONLY PARAMETERS (DO NOT MODIFY)
 
