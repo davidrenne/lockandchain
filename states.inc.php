@@ -61,7 +61,7 @@ $machinestates = array(
     "name" => "gameEnd",
     "description" => clienttranslate("End of game"),
     "type" => "manager",
-    "action" => "stGameEnd",
+    "action" => "stEndGame",
     "args" => "argGameEnd"
   )
 );

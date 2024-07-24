@@ -117,3 +117,25 @@
 .rotate-and-scale {
   animation: rotateRight 1s forwards, scaleUp 1s forwards 1s;
 }
+
+#messages {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.knockout-message {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #ffdddd;
+  border: 1px solid #ff8888;
+  border-radius: 5px;
+  color: #d8000c;
+  font-size: 18px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.knockout-message .emoji {
+  font-size: 24px;
+  margin-right: 10px;
+}

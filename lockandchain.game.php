@@ -200,9 +200,7 @@ class LockAndChain extends Table
         foreach ($knockedOutPlayers as $player_id) {
           $this->knockOutPlayer($player_id);
         }
-        if ($this->isGameEnd()) {
-          $this->gamestate->nextState('endGame');
-        } else {
+        if (!$this->isGameEnd()) {
           $this->gamestate->nextState('nextPlayer');
         }
       } else {
@@ -328,22 +326,51 @@ class LockAndChain extends Table
     // Mark player as eliminated in the database
     self::DbQuery("UPDATE player SET player_eliminated = 1 WHERE player_id = $player_id");
 
+    // Get all card_ids to be removed
+    $card_ids = self::getCollectionFromDB("SELECT card_id FROM Cards WHERE player_id = $player_id");
+    $card_types = self::getCollectionFromDB("SELECT card_type_arg FROM Cards WHERE player_id = $player_id");
+    $card_ids2 = self::getCollectionFromDB("SELECT card_id FROM CardPlacements WHERE player_id = $player_id");
+    $card_types2 = self::getCollectionFromDB("SELECT card_number AS card_type_arg FROM CardPlacements WHERE player_id = $player_id");
+
+    $padded_card_ids = array_map(function ($card_id) {
+      return str_pad($card_id, 2, '0', STR_PAD_LEFT);
+    }, array_keys($card_ids));
+    $padded_card_ids2 = array_map(function ($card_id) {
+      return str_pad($card_id, 2, '0', STR_PAD_LEFT);
+    }, array_keys($card_ids2));
+
+    $padded_card_types = array_map(function ($card_id) {
+      return str_pad($card_id, 3, '0', STR_PAD_LEFT);
+    }, array_keys($card_types));
+    $padded_card_types2 = array_map(function ($card_id) {
+      return str_pad($card_id, 2, '0', STR_PAD_LEFT);
+    }, array_keys($card_types2));
+
+    $all_card_ids = array_merge(array_values($padded_card_ids), array_values($padded_card_ids2));
+    $all_card_types = array_merge(array_values($padded_card_types), array_values($padded_card_types2));
+
+
     // Notify all players
     self::notifyAllPlayers(
       'playerKnockedOut',
       clienttranslate('${player_name} has been knocked out!'),
       array(
         'player_id' => $player_id,
-        'player_name' => self::getPlayerNameById($player_id)
+        'player_name' => self::getPlayerNameById($player_id),
+        'card_ids' => $all_card_ids,
+        'card_types' => $all_card_types
       )
     );
+
 
     // Notify the player that they have been eliminated
     self::notifyPlayer(
       $player_id,
       'playerEliminated',
       clienttranslate('You have been knocked out of the game.'),
-      array()
+      array(
+        'player_id' => $player_id
+      )
     );
 
   }
@@ -389,7 +416,7 @@ class LockAndChain extends Table
             'cardRemoved',
             '',
             array(
-              'card_number' => $card['card_number']
+              'card_number' => str_pad($card['card_number'], 3, '0', STR_PAD_LEFT)
             )
           );
         }
@@ -480,9 +507,9 @@ class LockAndChain extends Table
     // Comment out the above line and uncomment one of the following lines to run a test scenario:
 
     // $this->testScenarios->testDiscardedChainBreakLockCreate();
-    //$this->testScenarios->testRemovePilesAfterPlayerKnockOut();
+    // $this->testScenarios->testRemovePilesAfterPlayerKnockOut();
     //$this->testScenarios->testAbsoluteTie();
-    $this->testScenarios->testTieButWinner();
+    // $this->testScenarios->testTieButWinner();
     // $this->testScenarios->testQuick4Player();
     // $this->testScenarios->testQuickLock();
 
@@ -532,7 +559,6 @@ class LockAndChain extends Table
     $players = self::loadPlayersBasicInfos();
 
     foreach ($players as $player_id => $player) {
-      $this->customLog("Processing player", $player_id);
 
       $playerCards = [];
       $lockStart = null;
@@ -635,13 +661,11 @@ class LockAndChain extends Table
 
   private function insertChain($player_id, $start, $end)
   {
-    $this->customLog("Inserting Chain", "player: $player_id, start: $start, end: $end");
     self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
   }
 
   private function insertLock($player_id, $start, $end)
   {
-    $this->customLog("Inserting Lock", "player: $player_id, start: $start, end: $end");
     self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
   }
 
@@ -654,7 +678,6 @@ class LockAndChain extends Table
     }
 
     $player_id = $card["player_id"];
-    $this->customLog("adfasdf", $player_id);
     try {
       // Validate the move
       $this->validateCardPlay($player_id, $card_id, $card_number);
@@ -764,13 +787,19 @@ class LockAndChain extends Table
   }
 
 
+
+  function isGameEnd()
+  {
+    $activePlayers = self::getObjectListFromDB("SELECT player_id FROM player WHERE player_eliminated = 0 AND player_zombie = 0");
+    if (count($activePlayers) <= 1) {
+      $this->declareWinner($activePlayers[0]['player_id']);
+    }
+    return count($activePlayers) <= 1;
+  }
+
   // function isGameEnd()
   // {
-  //   $players = self::loadPlayersBasicInfos();
-  //   $active_players = array_filter($players, function ($player) {
-  //     return $player['player_zombie'] == 0;
-  //   });
-
+  //   $active_players = self::getObjectListFromDB("SELECT * FROM player WHERE player_eliminated = 0 AND player_zombie = 0");
   //   if (count($active_players) <= 2) {
   //     $has_legal_move = 0; // Initialize with 0 (false)
   //     foreach ($active_players as $player_id => $player) {
@@ -779,19 +808,25 @@ class LockAndChain extends Table
   //     // If no player has a legal move, the game ends
   //     return !$has_legal_move;
   //   }
+  //   if (count($active_players) <= 1) {
+  //     return true;
+  //   }
 
   //   return false;
   // }
 
-  function isGameEnd()
-  {
-    $activePlayers = self::getObjectListFromDB("SELECT player_id FROM player WHERE player_eliminated = 0");
-    return count($activePlayers) <= 1;
-  }
+  // function isGameEnd()
+  // {
+  //   $activePlayers = self::getObjectListFromDB("SELECT player_id FROM player WHERE player_eliminated = 0");
+  //   return count($activePlayers) <= 1;
+  // }
 
   // build out stEndGame that calls gameWinner and publishes a winner with that player id in boardgamearena.com
   function stEndGame()
   {
+
+    // $this->setStat($pointsWin ? 1 : 0, 'pointsWin');
+    // $this->setStat($eliminationWin ? 1 : 0, 'eliminationWin');
     $winner = $this->gameWinner();
     if ($winner != "error") {
       self::DbQuery("UPDATE player SET player_score = 1 WHERE player_id = $winner");
@@ -808,26 +843,10 @@ class LockAndChain extends Table
 
   function gameWinner()
   {
-    $players = self::loadPlayersBasicInfos();
-    $active_players = array_filter($players, function ($player) {
-      return $player['player_zombie'] == 0;
-    });
 
-    if (count($active_players) <= 2) {
-      $loser = 0;
-      foreach ($active_players as $player_id => $player) {
-        if (!$this->hasLegalMove($player_id)) {
-          // Return the player who has a legal move
-          $loser = $player_id;
-        }
-      }
-      $winner = 0;
-      foreach ($active_players as $player_id => $player) {
-        if ($loser != $player_id) {
-          $winner = $player_id;
-        }
-      }
-      return $winner;
+    $activePlayers = self::getObjectListFromDB("SELECT player_id FROM player WHERE player_eliminated = 0 AND player_zombie = 0");
+    if (count($activePlayers) <= 1) {
+      return $activePlayers[0]['player_id'];
     }
 
     return "error";
@@ -835,16 +854,21 @@ class LockAndChain extends Table
 
   function hasLegalMove($player_id)
   {
-    // Implement your logic to check if a player has a legal move
+    // Retrieve all cards in the player's hand
     $cards_in_hand = self::getObjectListFromDB("SELECT card_type_arg, card_id FROM PlayerHands WHERE player_id = $player_id");
+
     foreach ($cards_in_hand as $card) {
       try {
+        // Check if the card can be legally played
         $this->validateCardPlay($player_id, $card['card_id'], $card['card_type_arg']);
+        // If validateCardPlay does not throw an exception, return true
         return true;
       } catch (Exception $e) {
-        return false;
+        // If an exception is caught, continue checking the next card
+        continue;
       }
     }
+    // If no cards can be legally played, return false
     return false;
   }
 

@@ -51,14 +51,14 @@ class LockAndChainTestScenarios
 
     // Set up initial hands
     $this->insertPlayerCards($this->player_ids[0], [1, 32, 10, 15, 20, 25, 30]);
-    $this->insertPlayerCards($this->player_ids[1], [35, 36, 2, 7, 12, 17, 22]);
+    $this->insertPlayerCards($this->player_ids[1], [35, 36, 33, 7]);
     if (isset($this->player_ids[2])) {
-      $this->insertPlayerCards($this->player_ids[2], [33, 34, 3, 8, 13, 18, 23]);
+      $this->insertPlayerCards($this->player_ids[2], [33, 34, 3]);
     }
 
     // This setup allows for:
     // 1. Player 1 to play 1, then 32
-    // 2. Players 2 and 3 to play their high cards (33, 34, 35, 36) in any order
+    // 2. Players 2 and 3 to play their high cards (33, 34, 35, 36) in any order, second player plays 33 over the last persons knocked
     // 3. Continued play until all players are unable to make a move
     // 4. Verification of pile removal when players are knocked out
   }

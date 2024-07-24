@@ -348,11 +348,68 @@ define([
       dojo.subscribe("newCardDrawn", this, "notif_newCardDrawn");
       dojo.subscribe("invalidSelection", this, "notif_invalidSelection");
       dojo.subscribe("playerEliminated", this, "notif_playerEliminated");
+      dojo.subscribe("playerKnockedOut", this, "notif_playerKnockedOut");
+    },
+
+    notif_playerKnockedOut: function (notif) {
+      var card_types = notif.args.card_types;
+      var card_ids = notif.args.card_ids;
+      // Remove all cards belonging to the knocked-out player
+      card_types.forEach((card_id) => {
+        let cellElement = document.getElementById(`cell_${card_id}`);
+        if (cellElement) {
+          // Get the image element within the cell
+          let imageElement = cellElement.querySelector("img");
+          if (imageElement) {
+            console.log(
+              "https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_board_" +
+                card_id +
+                ".png"
+            );
+            imageElement.src =
+              "https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_board_" +
+              card_id +
+              ".png";
+          }
+        }
+      });
+
+      card_ids.forEach((card_id) => {
+        var cardElement = dojo.query("#player_card_" + card_id)[0];
+        if (cardElement) {
+          dojo.destroy(cardElement);
+        }
+      });
+
+      // Display a message to all players
+      this.showMessage(
+        _(notif.args.player_name + " has been knocked out!"),
+        "info"
+      );
     },
 
     notif_playerEliminated: function (notif) {
       if (notif.args.player_id === this.player_id) {
-        this.showMessage(_("You have been knocked out of the game."), "info");
+        // Create the message div
+        var messageDiv = document.createElement("div");
+        messageDiv.className = "knockout-message";
+
+        // Create the emoji span
+        var emojiSpan = document.createElement("span");
+        emojiSpan.className = "emoji";
+        emojiSpan.textContent = "💀";
+
+        // Create the text span
+        var textSpan = document.createElement("span");
+        textSpan.textContent = _("You have been knocked out of the game.");
+
+        // Append emoji and text to the message div
+        messageDiv.appendChild(emojiSpan);
+        messageDiv.appendChild(textSpan);
+
+        // Append the message div to the messages container
+        var messagesContainer = document.getElementById("messages");
+        messagesContainer.appendChild(messageDiv);
       }
     },
 
@@ -514,22 +571,26 @@ define([
 
     notif_cardRemoved: function (notif) {
       var cardNumber = notif.args.card_number;
-      var card = dojo.query("#cell_" + cardNumber + " .player_card")[0];
+      var card = dojo.query("#cell_" + cardNumber + " img")[0];
 
       if (card) {
         // Fade out the card
         dojo
           .fadeOut({
             node: card,
-            duration: 500,
+            duration: 300,
             onEnd: dojo.hitch(this, function () {
               // Remove the card from the UI
               dojo.empty("cell_" + cardNumber);
               dojo.destroy(card);
 
-              // Optionally, place a placeholder or update the UI to show an empty slot
               var emptySlot = dojo.place(
-                '<div class="empty-slot"></div>',
+                '<div class="card_container">' +
+                  '<img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_board_' +
+                  cardNumber +
+                  '.png" />' +
+                  '<div class="card_placeholder"></div>' +
+                  "</div>",
                 "cell_" + cardNumber
               );
               dojo.style(emptySlot, "opacity", "0");
@@ -538,7 +599,7 @@ define([
               dojo
                 .fadeIn({
                   node: emptySlot,
-                  duration: 500,
+                  duration: 200,
                   onEnd: dojo.hitch(this, function () {
                     // Process the next notification after a short delay
                     setTimeout(

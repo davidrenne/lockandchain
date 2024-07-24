@@ -3,6 +3,9 @@
 <div id="game_area">
     <h1>Lock and Chain</h1>
 
+    <div id="messages">
+      
+    </div>
     <div id="board">
         <!-- BEGIN board -->
         <div class="grid_cell" id="cell_{CELL_ID}">
