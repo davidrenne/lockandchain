@@ -26,24 +26,6 @@ class LockAndChainTestScenarios
     return $result['player_color'];
   }
 
-  public function testDiscardedChainBreakLockCreate()
-  {
-    // Clear existing cards
-    $this->game->DbQuery("DELETE FROM Cards WHERE player_id IN (" . implode(',', $this->player_ids) . ")");
-
-    // Set up initial hands
-    $this->insertPlayerCards($this->player_ids[0], [36, 1, 2, 3, 5, 9]);
-    $this->insertPlayerCards($this->player_ids[1], [36, 6, 2, 5]);
-
-    // Note: The actual playing of cards and validation of moves should be done in the main game logic
-    // This setup allows for:
-    // 1. Both players to play 36 (which should be discarded)
-    // 2. Player 1 to play 1, 2, 3 to create a lock
-    // 3. Player 2 to attempt playing 6 (should be rejected)
-    // 4. Player 2 to attempt playing 2 on Player 1's 2 (should be rejected)
-    // 5. Player 2 to play 5 (should be accepted)
-  }
-
   public function testRemovePilesAfterPlayerKnockOut()
   {
     // Clear existing cards
@@ -69,7 +51,7 @@ class LockAndChainTestScenarios
     $this->game->DbQuery("DELETE FROM Cards WHERE player_id IN (" . implode(',', $this->player_ids) . ")");
 
     // Set up initial hands
-    $this->insertPlayerCards($this->player_ids[0], [1, 2, 24, 36]);
+    $this->insertPlayerCards($this->player_ids[0], [1, 2, 3, 36]);
     $this->insertPlayerCards($this->player_ids[1], [24, 25, 26, 36]);
 
     // This setup allows for:

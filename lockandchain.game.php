@@ -506,9 +506,8 @@ class LockAndChain extends Table
 
     // Comment out the above line and uncomment one of the following lines to run a test scenario:
 
-    // $this->testScenarios->testDiscardedChainBreakLockCreate();
     // $this->testScenarios->testRemovePilesAfterPlayerKnockOut();
-    //$this->testScenarios->testAbsoluteTie();
+    // $this->testScenarios->testAbsoluteTie();
     // $this->testScenarios->testTieButWinner();
     // $this->testScenarios->testQuick4Player();
     // $this->testScenarios->testQuickLock();
