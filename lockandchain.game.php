@@ -301,7 +301,7 @@ class LockAndChain extends Table
       )
     );
 
-    $this->gamestate->nextState('endGame');
+    $this->gamestate->nextState('gameEnd');
   }
 
   function playerHasValidMove($player_id)
@@ -463,7 +463,7 @@ class LockAndChain extends Table
       )
     );
 
-    $this->gamestate->nextState('endGame');
+    $this->gamestate->nextState('gameEnd');
   }
 
 
@@ -507,7 +507,7 @@ class LockAndChain extends Table
     // Comment out the above line and uncomment one of the following lines to run a test scenario:
 
     // $this->testScenarios->testDiscardedChainBreakLockCreate();
-    // $this->testScenarios->testRemovePilesAfterPlayerKnockOut();
+    $this->testScenarios->testRemovePilesAfterPlayerKnockOut();
     //$this->testScenarios->testAbsoluteTie();
     // $this->testScenarios->testTieButWinner();
     // $this->testScenarios->testQuick4Player();
@@ -515,10 +515,27 @@ class LockAndChain extends Table
 
   }
 
+  function argGameEnd()
+  {
+    $players = self::loadPlayersBasicInfos();
+    $results = array();
+    foreach ($players as $player_id => $player_info) {
+      $score = self::getUniqueValueFromDB("SELECT player_score FROM player WHERE player_id = $player_id");
+      $results[] = array(
+        'player_id' => $player_id,
+        'player_name' => $player_info['player_name'],
+        'score' => $score
+      );
+    }
+    return array(
+      'results' => $results
+    );
+  }
+
   // public function stGameEndStats()
   // {
   //   $this->log->gameEndStats();
-  //   $this->gamestate->nextState('endgame');
+  //   $this->gamestate->nextState('gameEnd');
   // }
 
   public function validateCardPlay($player_id, $card_id, $card_number)
@@ -839,6 +856,31 @@ class LockAndChain extends Table
         )
       );
     }
+
+    // Notify players with final scores
+    $players = self::loadPlayersBasicInfos();
+    $results = array();
+    foreach ($players as $player_id => $player_info) {
+      $score = self::getUniqueValueFromDB("SELECT player_score FROM player WHERE player_id = $player_id");
+      $results[] = array(
+        'player_id' => $player_id,
+        'player_name' => $player_info['player_name'],
+        'score' => $score
+      );
+    }
+
+    // Set the game state arguments
+    $this->gamestate->setAllPlayersMultiactive();
+
+    // Notify players that the game has ended
+    self::notifyAllPlayers(
+      'endGame',
+      clienttranslate('The game has ended.'),
+      array(
+        'results' => $results
+      )
+    );
+    parent::stGameEnd();
   }
 
   function gameWinner()

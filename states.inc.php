@@ -45,8 +45,8 @@ $machinestates = array(
     "description" => "",
     "type" => "game",
     "action" => "stResolveSelections",
-    "possibleactions" => array("nextPlayer", "endGame", "playerTurn"),
-    "transitions" => array("nextPlayer" => ST_PLAYER_TURN, "playerTurn" => ST_PLAYER_TURN, "endGame" => 99, "zombiePass" => 2)
+    "possibleactions" => array("nextPlayer", "gameEnd", "playerTurn"),
+    "transitions" => array("nextPlayer" => ST_PLAYER_TURN, "playerTurn" => ST_PLAYER_TURN, "gameEnd" => 99, "zombiePass" => 2)
   ),
 
   ST_NEXT_PLAYER => array(
@@ -62,6 +62,6 @@ $machinestates = array(
     "description" => clienttranslate("End of game"),
     "type" => "manager",
     "action" => "stEndGame",
-    "args" => "argGameEnd"
+    'args' => 'argGameEnd'
   )
 );

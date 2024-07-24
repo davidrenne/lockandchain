@@ -349,7 +349,10 @@ define([
       dojo.subscribe("invalidSelection", this, "notif_invalidSelection");
       dojo.subscribe("playerEliminated", this, "notif_playerEliminated");
       dojo.subscribe("playerKnockedOut", this, "notif_playerKnockedOut");
+      dojo.subscribe("endGame", this, "notif_endGame");
     },
+
+    displayScores: function (results) {},
 
     notif_playerKnockedOut: function (notif) {
       var card_types = notif.args.card_types;
@@ -567,6 +570,10 @@ define([
           }),
         })
         .play();
+    },
+
+    notif_endGame: function (notif) {
+      this.showMessage(_("The game has ended."), "info");
     },
 
     notif_cardRemoved: function (notif) {
