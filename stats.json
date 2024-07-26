@@ -1,1 +1,21 @@
-{}
+{
+  "table": {
+    "rounds_count": {
+      "id": 10,
+      "name": "Number of rounds",
+      "type": "int"
+    }
+  },
+  "player": {
+    "cards_in_play": {
+      "id": 20,
+      "name": "Cards in play",
+      "type": "int"
+    },
+    "chains_broken": {
+      "id": 21,
+      "name": "Chains broken",
+      "type": "int"
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 <div id="game_area">
     <h1>Lock and Chain</h1>
-
+    <div id="round_count" class="round_count"></div>
     <div id="messages">
       
     </div>

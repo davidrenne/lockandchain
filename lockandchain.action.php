@@ -56,6 +56,14 @@ class action_lockandchain extends APP_GameAction
     self::ajaxResponse();
   }
 
+  public function updateStats()
+  {
+    self::setAjaxMode();
+    $this->game->notifyPlayerStats();
+    $this->game->notifyRoundCounts();
+    self::ajaxResponse();
+  }
+
   public function getPlayerHand()
   {
     self::setAjaxMode();

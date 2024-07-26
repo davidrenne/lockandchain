@@ -6,7 +6,7 @@ var jstpl_player_hand =
    </div>';
 
 var jstpl_player_card =
-  '<div class="player_card" id="player_card_${CARD_ID}">\
+  '<div class="player_card ${CARD_CLASS}" id="player_card_${CARD_ID}">\
     <img src="https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_${CARD_COLOR}_${CARD_NUMBER}.png" />\
 </div>';
 
@@ -83,6 +83,7 @@ define([
         for (let i = 0; i < gamedatas.playerHand.length; i++) {
           let card = gamedatas.playerHand[i];
           playerCards += this.format_block("jstpl_player_card", {
+            CARD_CLASS: gamedatas.card_class,
             CARD_ID: card.card_id,
             CARD_COLOR: card.card_type,
             CARD_NUMBER: card.card_type_arg.toString().padStart(2, "0"),
@@ -100,7 +101,7 @@ define([
       dojo.place(jstpl_confirm_button, "player_hand_container", "after");
       dojo.connect($("confirm_button"), "onclick", this, "onConfirmSelection");
 
-      this.setupNotifications();
+      //this.setupNotifications();
 
       console.log("Ending game setup");
     },
@@ -225,64 +226,66 @@ define([
     },
 
     // This method would be called when all players have made their selections
-    resolveSelections: function (selections) {
-      // Display all selected cards
-      var selectionDisplay = $("selection-display");
-      if (!selectionDisplay) {
-        selectionDisplay = dojo.place(
-          '<div id="selection-display"></div>',
-          "game_play_area"
-        );
-      }
-      dojo.empty(selectionDisplay);
+    // resolveSelections: function (selections) {
+    //   alert(0);
+    //   // Display all selected cards
+    //   var selectionDisplay = $("selection-display");
+    //   if (!selectionDisplay) {
+    //     selectionDisplay = dojo.place(
+    //       '<div id="selection-display"></div>',
+    //       "game_play_area"
+    //     );
+    //   }
+    //   dojo.empty(selectionDisplay);
 
-      // Check for duplicate selections
-      var cardCounts = {};
-      for (var player_id in selections) {
-        var card = selections[player_id];
-        if (cardCounts[card.card_number]) {
-          cardCounts[card.card_number].push(player_id);
-        } else {
-          cardCounts[card.card_number] = [player_id];
-        }
+    //   // Check for duplicate selections
+    //   var cardCounts = {};
+    //   for (var player_id in selections) {
+    //     var card = selections[player_id];
+    //     if (cardCounts[card.card_number]) {
+    //       cardCounts[card.card_number].push(player_id);
+    //     } else {
+    //       cardCounts[card.card_number] = [player_id];
+    //     }
 
-        dojo.place(
-          this.format_block("jstpl_player_card", {
-            CARD_ID: card.card_id,
-            CARD_COLOR: card.card_type,
-            CARD_NUMBER: card.card_number,
-          }),
-          selectionDisplay
-        );
-      }
+    //     dojo.place(
+    //       this.format_block("jstpl_player_card", {
+    //         CARD_CLASS: gamedatas.card_class,
+    //         CARD_ID: card.card_id,
+    //         CARD_COLOR: card.card_type,
+    //         CARD_NUMBER: card.card_number,
+    //       }),
+    //       selectionDisplay
+    //     );
+    //   }
 
-      // Resolve duplicates and place cards
-      for (var card_number in cardCounts) {
-        if (cardCounts[card_number].length > 1) {
-          // Duplicate found, discard these cards
-          cardCounts[card_number].forEach((player_id) => {
-            this.discardCard(selections[player_id].card_id);
-          });
-        } else {
-          // No duplicate, attempt to place the card
-          var player_id = cardCounts[card_number][0];
-          var card = selections[player_id];
-          this.placeCard(card.card_id, card.card_number);
-        }
-      }
+    //   // Resolve duplicates and place cards
+    //   for (var card_number in cardCounts) {
+    //     if (cardCounts[card_number].length > 1) {
+    //       // Duplicate found, discard these cards
+    //       cardCounts[card_number].forEach((player_id) => {
+    //         this.discardCard(selections[player_id].card_id);
+    //       });
+    //     } else {
+    //       // No duplicate, attempt to place the card
+    //       var player_id = cardCounts[card_number][0];
+    //       var card = selections[player_id];
+    //       this.placeCard(card.card_id, card.card_number);
+    //     }
+    //   }
 
-      dojo.style("confirm_button", "display", "inline-block");
+    //   dojo.style("confirm_button", "display", "inline-block");
 
-      // Refresh the player's hand after resolving selections
-      this.ajaxcall(
-        "/lockandchain/lockandchain/getPlayerHand.html",
-        { player_id: this.player_id, lock: true },
-        this,
-        function (gamedatas) {
-          this.refreshPlayerHand(gamedatas);
-        }
-      );
-    },
+    //   // Refresh the player's hand after resolving selections
+    //   this.ajaxcall(
+    //     "/lockandchain/lockandchain/getPlayerHand.html",
+    //     { player_id: this.player_id, lock: true },
+    //     this,
+    //     function (gamedatas) {
+    //       this.refreshPlayerHand(gamedatas);
+    //     }
+    //   );
+    // },
 
     discardCard: function (card_id) {
       // Implement card discard logic
@@ -350,6 +353,43 @@ define([
       dojo.subscribe("playerEliminated", this, "notif_playerEliminated");
       dojo.subscribe("playerKnockedOut", this, "notif_playerKnockedOut");
       dojo.subscribe("endGame", this, "notif_endGame");
+      dojo.subscribe("updatePlayerStats", this, "notif_updatePlayerStats");
+      dojo.subscribe("newRoundCount", this, "notif_newRoundCount");
+
+      this.ajaxcall(
+        "/lockandchain/lockandchain/updateStats.html",
+        {},
+        this,
+        function (result) {}
+      );
+    },
+
+    notif_updatePlayerStats: function (notif) {
+      var playerStats = notif.args.playerStats;
+      for (var playerId in playerStats) {
+        var stats = playerStats[playerId];
+        var statsElement = dojo.byId("player_stats_" + playerId);
+        if (!statsElement) {
+          // Create the stats element if it doesn't exist
+          statsElement = dojo.create(
+            "div",
+            {
+              id: "player_stats_" + playerId,
+              class: "player_stats",
+              innerHTML: stats.cards_in_play + " cards in play",
+            },
+            "overall_player_board_" + playerId
+          );
+        } else {
+          // Update the existing stats element
+          statsElement.innerHTML = stats.cards_in_play + " cards in play";
+        }
+      }
+    },
+
+    notif_newRoundCount: function (notif) {
+      var roundCount = notif.args.roundCount;
+      dojo.byId("round_count").innerHTML = "Round: " + roundCount;
     },
 
     displayScores: function (results) {},
@@ -438,6 +478,7 @@ define([
       if (!existingCard) {
         // Create the new card element only if it doesn't exist
         var newCardHtml = this.format_block("jstpl_player_card", {
+          CARD_CLASS: notif.args.card_class,
           CARD_ID: notif.args.card_id,
           CARD_COLOR: notif.args.card_type,
           CARD_NUMBER: notif.args.card_type_arg.toString().padStart(2, "0"),

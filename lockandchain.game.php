@@ -107,7 +107,7 @@ class LockAndChainTestScenarios
 
     // Set up initial hands with ascending order
     $this->insertPlayerCards($this->player_ids[0], [1, 3, 6, 9, 8, 33, 34, 35, 36]);
-    $this->insertPlayerCards($this->player_ids[1], [3, 7, 8, 9, 10, 11, 12, 13]);
+    $this->insertPlayerCards($this->player_ids[1], [3, 7, 6, 8, 9, 10, 11, 12, 13]);
 
     // This setup allows for:
     // 1. Ensure player 2 can play on the 3 card
@@ -211,6 +211,13 @@ class LockAndChain extends Table
       // Initialize players
       $this->initializePlayers($players);
 
+      $this->initStat('table', 'rounds_count', 0);
+      $this->incNotifyRound();
+      foreach ($players as $player_id => $player) {
+        $this->initStat('player', 'cards_in_play', 0, $player_id);
+        $this->initStat('player', 'chains_broken', 0, $player_id);
+      }
+
       // Initialize components here
       $this->initComponents();
 
@@ -244,6 +251,19 @@ class LockAndChain extends Table
   function resolveSelections()
   {
     $this->gamestate->nextState("resolveSelections");
+  }
+  function incNotifyRound()
+  {
+    $this->incStat(1, 'rounds_count');
+    $this->notifyRoundCounts();
+  }
+
+  function notifyRoundCounts()
+  {
+    $roundCount = $this->getStat('rounds_count');
+    self::notifyAllPlayers('newRoundCount', clienttranslate('Round ${roundCount} begins'), [
+      'roundCount' => $roundCount,
+    ]);
   }
 
   function nextPlayer()
@@ -313,6 +333,23 @@ class LockAndChain extends Table
             $invalid_player_id = $player_id;
             throw $e;
           }
+          // Valid card at this point:
+
+          $chains = self::getCollectionFromDb("SELECT * FROM Chains WHERE start_position <= $card_number AND end_position >= $card_number");
+          foreach ($chains as $chain) {
+            if ($chain['player_id'] != $player_id) {
+              $breakingPlayer = self::getUniqueValueFromDB("SELECT player_name FROM player WHERE player_id = $player_id");
+              $brokenPlayer = self::getUniqueValueFromDB("SELECT player_name FROM player WHERE player_id = {$chain['player_id']}");
+              $chainRange = "{$chain['start_position']}-{$chain['end_position']}";
+              self::notifyAllPlayers('chainBroken', clienttranslate('${breakingPlayer} broke ${brokenPlayer}\'s chain (${chainRange}) with a ${card_number}'), [
+                'breakingPlayer' => $breakingPlayer,
+                'brokenPlayer' => $brokenPlayer,
+                'chainRange' => $chainRange,
+                'card_number' => $card_number,
+              ]);
+              $this->incStat(1, 'chains_broken', $player_id);
+            }
+          }
         }
 
         self::DbQuery("DELETE FROM PlayerHands WHERE card_id IN (" . implode(',', $cardCountIds[$card_number]) . ")");
@@ -330,6 +367,7 @@ class LockAndChain extends Table
             'newCardDrawn',
             '',
             array(
+              'card_class' => $this->getCardClass(),
               'card_id' => $card['id'],
               'card_type' => $card['card_type'],
               'card_type_arg' => $card['type']
@@ -395,6 +433,13 @@ class LockAndChain extends Table
         );
       }
 
+
+      $this->updatePlayerStats();
+      if (!$this->isGameEnd()) {
+        $this->incNotifyRound();
+        $this->notifyPlayerStats();
+      }
+
       self::DbQuery('COMMIT');
     } catch (Exception $e) {
       self::DbQuery('ROLLBACK');
@@ -410,6 +455,20 @@ class LockAndChain extends Table
     }
   }
 
+  function notifyPlayerStats()
+  {
+    self::notifyAllPlayers('updatePlayerStats', "", [
+      'playerStats' => $this->getPlayerStats(),
+    ]);
+  }
+  function updatePlayerStats()
+  {
+    $players = self::getCollectionFromDb("SELECT player_id FROM player");
+    foreach ($players as $player_id => $player) {
+      $cardsInPlay = self::getUniqueValueFromDB("SELECT COUNT(*) FROM Cards WHERE card_location IN ('hand', 'deck') AND card_location_arg = $player_id");
+      $this->setStat($cardsInPlay, 'cards_in_play', $player_id);
+    }
+  }
 
   function handleAllPlayersKnockedOut()
   {
@@ -481,6 +540,9 @@ class LockAndChain extends Table
     // Remove player's top cards from the board
     $this->removePlayerTopCards($player_id);
 
+
+    $this->setStat(0, 'cards_in_play', $player_id);
+
     // Mark player as eliminated in the database
     self::DbQuery("UPDATE player SET player_eliminated = 1 WHERE player_id = $player_id");
 
@@ -532,6 +594,27 @@ class LockAndChain extends Table
     );
 
   }
+
+  function getPlayerStats()
+  {
+    $playerStats = [];
+    $players = self::getCollectionFromDb("SELECT player_id, player_name, player_eliminated, player_zombie FROM player");
+    foreach ($players as $player_id => $player) {
+      $cardsInPlay = self::getUniqueValueFromDB("SELECT COUNT(*) FROM Cards WHERE card_location IN ('hand', 'deck') AND player_id = $player_id");
+      if ($player['player_zombie']) {
+        $cardsInPlay = 0;
+      }
+      if ($player['player_eliminated']) {
+        $cardsInPlay = 0;
+      }
+      $playerStats[$player_id] = [
+        'name' => $player['player_name'],
+        'cards_in_play' => $cardsInPlay
+      ];
+    }
+    return $playerStats;
+  }
+
 
   function removePlayerTopCards($player_id)
   {
@@ -1111,6 +1194,17 @@ class LockAndChain extends Table
     return parent::getCurrentPlayerId($bReturnNullIfNotLogged);
   }
 
+  function getCardClass()
+  {
+    $activePlayers = self::getObjectListFromDB("SELECT player_id FROM player");
+    if (count($activePlayers) == 2) {
+      return 'seven';
+    } else if (count($activePlayers) == 3) {
+      return 'six';
+    } else {
+      return 'five';
+    }
+  }
   function getAllDatas()
   {
     $result = array();
@@ -1125,6 +1219,7 @@ class LockAndChain extends Table
       $result['playerHand'] = array();
     }
 
+    $result['card_class'] = $this->getCardClass();
     $result['cardPlacements'] = self::getObjectListFromDB("SELECT * FROM CardPlacements");
     return $result;
   }
