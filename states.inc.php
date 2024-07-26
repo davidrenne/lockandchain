@@ -21,7 +21,7 @@ $machinestates = array(
     "description" => clienttranslate("Game setup"),
     "type" => "manager",
     "action" => "stGameSetup",
-    "transitions" => array("" => ST_MULTIPLAYER_SELECT_CARDS)
+    "transitions" => array("selectCards" => ST_MULTIPLAYER_SELECT_CARDS)
   ),
 
   // New state for simultaneous selection
@@ -29,7 +29,8 @@ $machinestates = array(
     'name' => 'selectCards',
     "args" => "argMultiPlayerTurn",
     'description' => clienttranslate('Waiting for players to select cards'),
-    'type' => 'multipleactiveplayer',
+    // 'type' => 'multipleactiveplayer',
+    'type' => 'multiactiveplayer',
     'possibleactions' => ['selectCard', 'resolveSelections'],
     'transitions' => [
       'resolve' => ST_RESOLVE_SELECTIONS, // Transition to the resolve state

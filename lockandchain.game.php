@@ -708,7 +708,7 @@ class LockAndChain extends Table
   {
 
     $default_colors = array("ff0000", "0000ff", "00ff00", "800080");
-    $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar, player_selected_card_id) VALUES ";
+    $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar, selected_card_id) VALUES ";
     $values = array();
     foreach ($players as $player_id => $player) {
       $color = array_shift($default_colors);
@@ -1052,7 +1052,7 @@ class LockAndChain extends Table
     );
   }
 
-  protected function getGameProgression()
+  function getGameProgression()
   {
     // Retrieve the current players who haven't been eliminated
     $sql = "SELECT player_id FROM player WHERE player_eliminated = 0";
@@ -1069,10 +1069,10 @@ class LockAndChain extends Table
     $sql = "
         SELECT cp.*
         FROM CardPlacements cp
-        JOIN player_cards pc ON cp.card_id = pc.card_id
-        WHERE pc.player_id = :player_id
+        JOIN Cards pc ON cp.card_id = pc.card_id
+        WHERE pc.player_id = $firstActivePlayerId
     ";
-    $cardPlacements = self::getObjectListFromDB($sql, ['player_id' => $firstActivePlayerId]);
+    $cardPlacements = self::getObjectListFromDB($sql);
 
     // Calculate the percentage of game progression
     $totalCardsPlaced = count($cardPlacements);
