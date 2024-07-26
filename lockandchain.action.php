@@ -34,13 +34,6 @@ class action_lockandchain extends APP_GameAction
 
       // If validation passes, proceed with selection
       $this->game->selectCard($player_id, $card_id);
-
-      // Check if all players have selected a card
-      if ($this->allPlayersHaveSelected()) {
-        $this->game->resolveSelections();
-      } else {
-        $this->game->nextPlayer();
-      }
       $this->game->notifyPlayer($player_id, 'selectionSuccess', '', array());
     } catch (BgaUserException $e) {
       $this->game->notifyPlayer(

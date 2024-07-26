@@ -303,14 +303,10 @@ define([
       console.log("Entering state: " + stateName);
 
       switch (stateName) {
-        case "playerTurn":
+        case "selectCards":
           this.updatePlayerColors(args.args.players);
           this.updateBoardState(args.args.locks);
-          if (this.isCurrentPlayerActive()) {
-            dojo.style("confirm_button", "display", "inline-block");
-          } else {
-            dojo.style("confirm_button", "display", "none");
-          }
+          dojo.style("confirm_button", "display", "inline-block");
           break;
       }
     },

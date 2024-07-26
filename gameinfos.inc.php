@@ -40,6 +40,8 @@ $gameinfos = array(
   'not_recommend_player_number' => null,
   // 'not_recommend_player_number' => array( 2, 3 ),      // <= example: this is not recommended to play this game with 2 or 3 players
 
+  'duration' => 10, // Adjust to 10-15 minutes
+
   // Estimated game duration, in minutes (used only for the launch, afterward the real duration is computed)
   'estimated_duration' => 30,
 

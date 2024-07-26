@@ -230,8 +230,7 @@ class LockAndChain extends Table
       // Set up game state
       $this->setGameStateInitialValue('currentTurn', 0);
 
-      // Initialize the first player
-      $this->activeNextPlayer();
+      $this->gamestate->nextState('multiplayerSelectCards');
 
       // Commit the transaction
       self::DbQuery("COMMIT");
@@ -266,11 +265,6 @@ class LockAndChain extends Table
     ]);
   }
 
-  function nextPlayer()
-  {
-    $this->gamestate->nextState("nextPlayer");
-  }
-
 
   public function bgaGameEnded(): bool
   {
@@ -302,6 +296,9 @@ class LockAndChain extends Table
 
     try {
       self::DbQuery("START TRANSACTION");
+      // Clear selections for the next round
+      $sql = "UPDATE player SET selected_card_id = NULL";
+      self::DbQuery($sql);
 
       foreach ($cardCounts as $card_number => $player_ids) {
         if (count($player_ids) > 1) {
@@ -397,11 +394,11 @@ class LockAndChain extends Table
           $this->knockOutPlayer($player_id);
         }
         if (!$this->isGameEnd()) {
-          $this->gamestate->nextState('nextPlayer');
+          $this->gamestate->nextState('multiplayerSelectCards');
         }
       } else {
         // No players knocked out, continue to next player
-        $this->gamestate->nextState('nextPlayer');
+        $this->gamestate->nextState('multiplayerSelectCards');
       }
 
       foreach ($cardCounts as $card_number => $player_ids) {
@@ -445,8 +442,7 @@ class LockAndChain extends Table
       self::DbQuery('ROLLBACK');
       if ($invalid_player_id !== null) {
         // An invalid play occurred, set the active player to the one who made the invalid play
-        $this->gamestate->changeActivePlayer($invalid_player_id);
-        $this->gamestate->nextState('playerTurn');
+        $this->gamestate->setPlayerNonMultiactive($invalid_player_id, 'selectCards');
       } else {
         // Some other error occurred
         throw new BgaUserException($e->getMessage());
@@ -712,11 +708,11 @@ class LockAndChain extends Table
   {
 
     $default_colors = array("ff0000", "0000ff", "00ff00", "800080");
-    $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar) VALUES ";
+    $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar, player_selected_card_id) VALUES ";
     $values = array();
     foreach ($players as $player_id => $player) {
       $color = array_shift($default_colors);
-      $values[] = "($player_id, '" . addslashes($player['player_name']) . "', '$color', '', '')";
+      $values[] = "($player_id, '" . addslashes($player['player_name']) . "', '$color', '', '', 0)";
     }
     $sql .= implode(',', $values);
     self::DbQuery($sql);
@@ -978,7 +974,6 @@ class LockAndChain extends Table
 
     } catch (BgaUserException $e) {
       // $this->gamestate->changeActivePlayer($player_id); // Set the active player to the current player
-      // $this->gamestate->nextState('playerTurn'); // Keep the player in their turn 
       self::notifyPlayer($player_id, 'invalidMove', clienttranslate('Invalid move: ${message}'), array('message' => $e->getMessage()));
       throw $e;
     }
@@ -1030,6 +1025,22 @@ class LockAndChain extends Table
     // Record the player's selection
     self::DbQuery("INSERT INTO PlayerSelections (player_id, card_id) VALUES ($player_id, $card_id)");
 
+    // Record the player's card selection
+    $sql = "UPDATE player SET selected_card_id = :card_id WHERE player_id = :player_id";
+    self::DbQuery($sql, ['card_id' => $card_id, 'player_id' => $player_id]);
+
+    // Check if all players have made their selection
+    $sql = "SELECT player_id FROM player WHERE selected_card_id IS NULL";
+    $result = self::getObjectListFromDB($sql);
+
+    if (empty($result)) {
+      // All players have made their selection, proceed to resolve
+      $this->resolveSelections();
+    } else {
+      // Wait for other players to select their cards
+      $this->gamestate->setPlayerNonMultiactive($player_id, 'selectCards');
+    }
+
     // Notify all players about the selection (without revealing the card)
     self::notifyAllPlayers(
       'cardSelected',
@@ -1041,22 +1052,34 @@ class LockAndChain extends Table
     );
   }
 
-  function stNextPlayer()
+  protected function getGameProgression()
   {
-    // Proceed to the next player
-    $current_player_id = $this->getCurrentPlayerId();
-    $next_player_id = self::getNextActivePlayer($current_player_id);
-    $this->gamestate->changeActivePlayer($next_player_id); // Set the active player to the current player 
-    $this->gamestate->nextState("playerTurn");
-  }
+    // Retrieve the current players who haven't been eliminated
+    $sql = "SELECT player_id FROM player WHERE player_eliminated = 0";
+    $activePlayers = self::getObjectListFromDB($sql);
 
-  private function getNextActivePlayer($current_player_id)
-  {
-    $next_player_id = self::getPlayerAfter($current_player_id);
-    while ($this->isPlayerEliminated($next_player_id)) {
-      $next_player_id = self::getPlayerAfter($next_player_id);
+    if (empty($activePlayers)) {
+      return 0;
     }
-    return $next_player_id;
+
+    // Use the first active player who hasn't been knocked out
+    $firstActivePlayerId = $activePlayers[0]['player_id'];
+
+    // Join their cards with the CardPlacements table
+    $sql = "
+        SELECT cp.*
+        FROM CardPlacements cp
+        JOIN player_cards pc ON cp.card_id = pc.card_id
+        WHERE pc.player_id = :player_id
+    ";
+    $cardPlacements = self::getObjectListFromDB($sql, ['player_id' => $firstActivePlayerId]);
+
+    // Calculate the percentage of game progression
+    $totalCardsPlaced = count($cardPlacements);
+    $totalPossiblePlacements = 36;
+    $progress = ($totalCardsPlaced / $totalPossiblePlacements) * 100;
+
+    return $progress;
   }
 
   private function isPlayerEliminated($player_id)
@@ -1179,14 +1202,7 @@ class LockAndChain extends Table
 
   public function zombieTurn($state, $active_player)
   {
-    $statename = $state['name'];
-
-    if ($statename == 'playerTurn') {
-      $this->gamestate->nextState('endTurn');
-    } else {
-      // For other states, just go to the next state
-      $this->gamestate->nextState('zombiePass');
-    }
+    $this->knockOutPlayer($active_player);
   }
 
   public function getCurrentPlayerId($bReturnNullIfNotLogged = false)
@@ -1210,7 +1226,7 @@ class LockAndChain extends Table
     $result = array();
     $current_player_id = $this->getCurrentPlayerId();
     $result['current_player_id'] = $current_player_id;
-    $result['players'] = $this->loadPlayersBasicInfos();
+    $result['players'] = self::getCollectionFromDB("SELECT * FROM player WHERE player_zombie = 0");
 
     // Fetch only the current player's hand
     if ($current_player_id !== null) {
@@ -1239,7 +1255,7 @@ class LockAndChain extends Table
     self::DbQuery($sql);
   }
 
-  public function argPlayerTurn(): array
+  public function argMultiPlayerTurn(): array
   {
     $players = self::loadPlayersBasicInfos();
     foreach ($players as $player_id => $player_info) {
