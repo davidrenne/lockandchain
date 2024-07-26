@@ -748,15 +748,11 @@ class LockAndChain extends Table
       // Get all cards for the player
       $playerCards = [];
       foreach ($boardState as $cardNumber => $ownerId) {
-        $this->customLog("Player cardNumber", $cardNumber);
-        $this->customLog("Player ownerId", $ownerId);
-        $this->customLog("Player player_id", $player_id);
         if ($ownerId == $player_id) {
           $playerCards[] = $cardNumber;
         }
       }
       sort($playerCards);
-      $this->customLog("Player $player_id cards: ", implode(', ', $playerCards));
 
       $chains = [];
       $currentChain = [];
@@ -769,63 +765,64 @@ class LockAndChain extends Table
           if ($card == end($currentChain) + 1 || $this->isGap($lastCard + 1, $card, $boardState, $player_id)) {
             $currentChain[] = $card;
           } else {
-            if (count($currentChain) > 1) {
-              $chains[] = $currentChain;
-            } else {
-              $chains[] = $currentChain;
-            }
+            $chains[] = $currentChain;
             $currentChain = [$card];
           }
         }
         $lastCard = $card;
       }
 
-      if (count($currentChain) > 1) {
-        $chains[] = $currentChain;
-      } else if (count($currentChain) == 1) {
+      if (!empty($currentChain)) {
         $chains[] = $currentChain;
       }
-
-      $this->customLog(" chains before filter: ", $chains);
-
-      // Filter out chains that are blocked by other players
-      $filteredChains = [];
-      foreach ($chains as $chain) {
-        $start = $chain[0];
-        $end = end($chain);
-        $blocked = false;
-        for ($i = $start + 1; $i < $end; $i++) {
-          if (isset($boardState[$i]) && $boardState[$i] != $player_id) {
-            $blocked = true;
-            break;
-          }
-        }
-        if (!$blocked) {
-          $filteredChains[] = $chain;
-        }
-      }
-
-      $this->customLog(" filteredChains: ", $filteredChains);
 
       // Insert chains into the database
-      foreach ($filteredChains as $chain) {
-        $start = $chain[0];
-        $end = end($chain);
-        self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
+      foreach ($chains as $chain) {
+        $this->insertChains($player_id, $chain);
       }
 
-      // Identify and insert locks
-      foreach ($filteredChains as $chain) {
-        if (count($chain) >= 3) { // Ensure three or more consecutive cards
-          $low = $chain[0];
-          $high = end($chain);
-          self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $low, $high)");
+      // Insert locks into the database
+      $consecutiveCards = [];
+      foreach ($chains as $chain) {
+        foreach ($chain as $card) {
+          $consecutiveCards[] = $card;
         }
+      }
+
+      $currentLock = [];
+      for ($i = 0; $i < count($consecutiveCards); $i++) {
+        if (empty($currentLock) || end($currentLock) + 1 == $consecutiveCards[$i]) {
+          $currentLock[] = $consecutiveCards[$i];
+        } else {
+          if (count($currentLock) >= 3) {
+            $this->insertLocks($player_id, $currentLock);
+          }
+          $currentLock = [$consecutiveCards[$i]];
+        }
+      }
+
+      if (count($currentLock) >= 3) {
+        $this->insertLocks($player_id, $currentLock);
       }
     }
   }
 
 
+  private function insertChains($player_id, $chain)
+  {
+    for ($i = 0; $i < count($chain) - 1; $i++) {
+      $start = $chain[$i];
+      $end = $chain[$i + 1];
+      self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
+    }
+  }
+
+  private function insertLocks($player_id, $chain)
+  {
+    $start = $chain[0];
+    $end = end($chain);
+    self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
+  }
 
 
   private function getBoardState()
@@ -838,15 +835,6 @@ class LockAndChain extends Table
     }
 
     return $boardState;
-  }
-  private function insertChain($player_id, $start, $end)
-  {
-    self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
-  }
-
-  private function insertLock($player_id, $start, $end)
-  {
-    self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
   }
 
   public function getBoardStateArg(): array
