@@ -13,9 +13,9 @@
 $gameinfos = array(
 
   // Name of the game in English (will serve as the basis for translation) 
-  'game_name' => "Lock And Chain",
+  'game_name' => 'Lock and Chain',
 
-  'display_name' => "Lock And Chain",
+  'game_name_en' => 'Lock and Chain',
 
   // Game publisher (use empty string if there is no publisher)
   'publisher' => 'My Publishing Company',
@@ -27,7 +27,7 @@ $gameinfos = array(
   'publisher_bgg_id' => 1234,
 
   // Board game geek ID of the game
-  'bgg_id' => 0,
+  'bgg_id' => 28143,
 
   // Players configuration that can be played (ex: 2 to 4 players)
   'players' => array(2, 3, 4),
