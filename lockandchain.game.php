@@ -747,7 +747,7 @@ class LockAndChain extends Table
 
     // Comment out the above line and uncomment one of the following lines to run a test scenario:
 
-    $this->testScenarios->inBetweenChainTests();
+    // $this->testScenarios->inBetweenChainTests();
     // $this->testScenarios->testRemovePilesAfterPlayerKnockOut();
     // $this->testScenarios->testAbsoluteTie();
     // $this->testScenarios->testTieButWinner();
