@@ -1,8 +1,166 @@
 <?php
 
-require_once ('lockandchain.game.tests.php');
-require_once ('lockandchain.game.cards.php');
 require_once (APP_GAMEMODULE_PATH . 'module/table/table.game.php');
+
+class LockAndChainTestScenarios
+{
+  private $game;
+  private $player_ids;
+
+  public function __construct($game)
+  {
+    $this->game = $game;
+    $players = $this->game->loadPlayersBasicInfos();
+    $this->player_ids = array_keys($players);
+  }
+
+  private function insertPlayerCards($player_id, $cards)
+  {
+    foreach ($cards as $card) {
+      $this->game->DbQuery("INSERT INTO Cards (card_type, card_type_arg, card_location, player_id, card_location_arg) 
+                        VALUES ('{$this->getPlayerColor($player_id)}', $card, 'deck', $player_id, 0)");
+    }
+  }
+
+  private function getPlayerColor($player_id)
+  {
+    $sql = "SELECT player_color FROM player WHERE player_id = $player_id";
+    $result = $this->game->getObjectFromDatabase($sql);
+    return $result['player_color'];
+  }
+
+  public function testRemovePilesAfterPlayerKnockOut()
+  {
+    // Clear existing cards
+    $this->game->DbQuery("DELETE FROM Cards WHERE player_id IN (" . implode(',', $this->player_ids) . ")");
+
+    // Set up initial hands
+    $this->insertPlayerCards($this->player_ids[0], [1, 32, 10, 15, 20, 25, 30]);
+    $this->insertPlayerCards($this->player_ids[1], [35, 36, 33, 7]);
+    if (isset($this->player_ids[2])) {
+      $this->insertPlayerCards($this->player_ids[2], [33, 34, 3]);
+    }
+
+    // This setup allows for:
+    // 1. Player 1 to play 1, then 32
+    // 2. Players 2 and 3 to play their high cards (33, 34, 35, 36) in any order, second player plays 33 over the last persons knocked
+    // 3. Continued play until all players are unable to make a move
+    // 4. Verification of pile removal when players are knocked out
+  }
+
+  public function testAbsoluteTie()
+  {
+    // Clear existing cards
+    $this->game->DbQuery("DELETE FROM Cards WHERE player_id IN (" . implode(',', $this->player_ids) . ")");
+
+    // Set up initial hands
+    $this->insertPlayerCards($this->player_ids[0], [1, 2, 3, 36]);
+    $this->insertPlayerCards($this->player_ids[1], [24, 25, 26, 36]);
+
+    // This setup allows for:
+    // 1. Player 1 to play 1, 2, 24
+    // 2. Player 2 to play 24, 25, 26
+    // 3. Both players to play 36 simultaneously
+    // 4. Verification of a tie game end
+  }
+
+  public function testTieButWinner()
+  {
+    // Clear existing cards
+    $this->game->DbQuery("DELETE FROM Cards WHERE player_id IN (" . implode(',', $this->player_ids) . ")");
+
+    // Set up initial hands
+    $this->insertPlayerCards($this->player_ids[0], [1, 2, 3, 4, 36]);
+    $this->insertPlayerCards($this->player_ids[1], [24, 25, 26, 35, 36]);
+
+    // This setup allows for:
+    // 1. Player 1 to play 1, 2, 3, 4 to create a lock of 4
+    // 2. Player 2 to play 24, 25, 26 to create a lock of 3
+    // 3. Both players to play 36 simultaneously
+    // 4. Verification that Player 1 wins due to having a larger lock
+  }
+
+  public function testQuick4Player()
+  {
+    // Clear existing cards
+    $this->game->DbQuery("DELETE FROM Cards WHERE player_id IN (" . implode(',', $this->player_ids) . ")");
+
+    // Set up initial hands with ascending order
+    $this->insertPlayerCards($this->player_ids[0], range(1, 36));
+    $this->insertPlayerCards($this->player_ids[1], [2, 11, 21, 31, 35, 22, 23, 24, 25]);
+    if (isset($this->player_ids[2])) {
+      $this->insertPlayerCards($this->player_ids[2], [3, 12, 22, 32, 34]);
+    }
+    if (isset($this->player_ids[3])) {
+      $this->insertPlayerCards($this->player_ids[3], [4, 13, 23, 33, 35, 32]);
+    }
+
+    // This setup allows for:
+    // 1. All players to play their cards in ascending order
+    // 2. Verification that players are knocked out quickly and correctly
+  }
+
+  public function inBetweenChainTests()
+  {
+    // Clear existing cards
+    $this->game->DbQuery("DELETE FROM Cards WHERE player_id IN (" . implode(',', $this->player_ids) . ")");
+
+    // Set up initial hands with ascending order
+    $this->insertPlayerCards($this->player_ids[0], [1, 3, 6, 9, 8, 33, 34, 35, 36]);
+    $this->insertPlayerCards($this->player_ids[1], [3, 7, 8, 9, 10, 11, 12, 13]);
+
+    // This setup allows for:
+    // 1. Ensure player 2 can play on the 3 card
+  }
+
+  public function testQuickLock()
+  {
+    // Clear existing cards
+    $this->game->DbQuery("DELETE FROM Cards WHERE player_id IN (" . implode(',', $this->player_ids) . ")");
+
+    // Set up initial hands
+    $this->insertPlayerCards($this->player_ids[0], [1, 2, 3, 5, 6, 7]);
+    $this->insertPlayerCards($this->player_ids[1], [2, 34, 35, 36, 33, 32]);
+
+    // This setup allows for:
+    // 1. Player 1 to play 1, 2, 3 to create a lock
+    // 2. Player 2 to play 34, 35, 36 to create another lock
+    // 3. Verification of lock animation and rotation
+    // 4. Player 2 to attempt playing 2 on Player 1's 2 (should be rejected)
+  }
+}
+
+class CardManager
+{
+  private $db;
+
+  public function __construct($db)
+  {
+    $this->db = $db;
+  }
+
+  public function standardHandDeal($players)
+  {
+    $cards = array();
+    foreach ($players as $player_id => $player) {
+      for ($i = 1; $i <= 36; $i++) {
+        $cards[] = array(
+          'card_type' => $player['player_color'],
+          'card_type_arg' => $i,
+          'card_location' => 'deck',
+          'player_id' => $player['player_id']
+        );
+      }
+    }
+
+    // Insert cards into Cards table
+    foreach ($cards as $card) {
+      $sql = "INSERT INTO Cards (card_type, card_type_arg, card_location, player_id, card_location_arg) 
+                    VALUES ('{$card['card_type']}', {$card['card_type_arg']}, '{$card['card_location']}', {$card['player_id']}, 0)";
+      $this->db->DbQuery($sql);
+    }
+  }
+}
 
 class LockAndChain extends Table
 {
@@ -506,6 +664,7 @@ class LockAndChain extends Table
 
     // Comment out the above line and uncomment one of the following lines to run a test scenario:
 
+    $this->testScenarios->inBetweenChainTests();
     // $this->testScenarios->testRemovePilesAfterPlayerKnockOut();
     // $this->testScenarios->testAbsoluteTie();
     // $this->testScenarios->testTieButWinner();
@@ -514,22 +673,22 @@ class LockAndChain extends Table
 
   }
 
-  function argGameEnd()
-  {
-    $players = self::loadPlayersBasicInfos();
-    $results = array();
-    foreach ($players as $player_id => $player_info) {
-      $score = self::getUniqueValueFromDB("SELECT player_score FROM player WHERE player_id = $player_id");
-      $results[] = array(
-        'player_id' => $player_id,
-        'player_name' => $player_info['player_name'],
-        'score' => $score
-      );
-    }
-    return array(
-      'results' => $results
-    );
-  }
+  // function argGameEnd()
+  // {
+  //   $players = self::loadPlayersBasicInfos();
+  //   $results = array();
+  //   foreach ($players as $player_id => $player_info) {
+  //     $score = self::getUniqueValueFromDB("SELECT player_score FROM player WHERE player_id = $player_id");
+  //     $results[] = array(
+  //       'player_id' => $player_id,
+  //       'player_name' => $player_info['player_name'],
+  //       'score' => $score
+  //     );
+  //   }
+  //   return array(
+  //     'results' => $results
+  //   );
+  // }
 
   // public function stGameEndStats()
   // {
@@ -563,76 +722,132 @@ class LockAndChain extends Table
 
     // The move is valid if we've reached this point
   }
-  private function rebuildChainsAndLocks()
+
+  private function isGap($start, $end, $boardState, $player_id)
+  {
+    for ($i = $start; $i < $end; $i++) {
+      if (isset($boardState[$i]) && $boardState[$i] != $player_id) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function rebuildChainsAndLocks()
   {
     // Clear existing chains and locks
     self::DbQuery("DELETE FROM Chains");
     self::DbQuery("DELETE FROM Locks");
 
+    // Get only active players
+    $activePlayers = self::getObjectListFromDB("SELECT player_id FROM player WHERE player_eliminated = 0 AND player_zombie = 0");
     $boardState = $this->getBoardState();
-    $this->customLog("boardState", json_encode($boardState));
 
-    $players = self::loadPlayersBasicInfos();
-
-    foreach ($players as $player_id => $player) {
-
+    foreach ($activePlayers as $player) {
+      $player_id = $player['player_id'];
+      // Get all cards for the player
       $playerCards = [];
-      $lockStart = null;
+      foreach ($boardState as $cardNumber => $ownerId) {
+        $this->customLog("Player cardNumber", $cardNumber);
+        $this->customLog("Player ownerId", $ownerId);
+        $this->customLog("Player player_id", $player_id);
+        if ($ownerId == $player_id) {
+          $playerCards[] = $cardNumber;
+        }
+      }
+      sort($playerCards);
+      $this->customLog("Player $player_id cards: ", implode(', ', $playerCards));
 
-      // Collect all cards for this player
-      for ($i = 1; $i <= 36; $i++) {
-        if (isset($boardState[$i]) && $boardState[$i] == $player_id) {
-          $playerCards[] = $i;
+      $chains = [];
+      $currentChain = [];
+      $lastCard = -1;
+
+      foreach ($playerCards as $card) {
+        if (empty($currentChain)) {
+          $currentChain[] = $card;
+        } else {
+          if ($card == end($currentChain) + 1 || $this->isGap($lastCard + 1, $card, $boardState, $player_id)) {
+            $currentChain[] = $card;
+          } else {
+            if (count($currentChain) > 1) {
+              $chains[] = $currentChain;
+            } else {
+              $chains[] = $currentChain;
+            }
+            $currentChain = [$card];
+          }
+        }
+        $lastCard = $card;
+      }
+
+      if (count($currentChain) > 1) {
+        $chains[] = $currentChain;
+      } else if (count($currentChain) == 1) {
+        $chains[] = $currentChain;
+      }
+
+      $this->customLog(" chains before filter: ", $chains);
+
+      // Filter out chains that are blocked by other players
+      $filteredChains = [];
+      foreach ($chains as $chain) {
+        $start = $chain[0];
+        $end = end($chain);
+        $blocked = false;
+        for ($i = $start + 1; $i < $end; $i++) {
+          if (isset($boardState[$i]) && $boardState[$i] != $player_id) {
+            $blocked = true;
+            break;
+          }
+        }
+        if (!$blocked) {
+          $filteredChains[] = $chain;
         }
       }
 
-      // Process chains and locks
-      $chainStart = null;
-      for ($i = 0; $i < count($playerCards); $i++) {
-        $currentCard = $playerCards[$i];
+      $this->customLog(" filteredChains: ", $filteredChains);
 
-        if ($chainStart === null) {
-          $chainStart = $currentCard;
-        }
+      // Insert chains into the database
+      foreach ($filteredChains as $chain) {
+        $start = $chain[0];
+        $end = end($chain);
+        self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
+      }
 
-        // Check if the chain should end
-        $endChain = false;
-        if ($i == count($playerCards) - 1) {
-          $endChain = true;
-        } else {
-          $nextCard = $playerCards[$i + 1];
-          for ($j = $currentCard + 1; $j < $nextCard; $j++) {
-            if (isset($boardState[$j]) && $boardState[$j] != $player_id) {
-              $endChain = true;
-              break;
-            }
-          }
-        }
-
-        if ($endChain) {
-          $this->insertChain($player_id, $chainStart, $currentCard);
-          $chainStart = null;
-        }
-
-        // Check for locks
-        if ($i >= 2 && $currentCard == $playerCards[$i - 1] + 1 && $playerCards[$i - 1] == $playerCards[$i - 2] + 1) {
-          if ($lockStart === null) {
-            $lockStart = $playerCards[$i - 2];
-          }
-          if ($i == count($playerCards) - 1 || $playerCards[$i + 1] != $currentCard + 1) {
-            $this->insertLock($player_id, $lockStart, $currentCard);
-            $lockStart = null;
-          }
-        } else {
-          if ($lockStart !== null) {
-            $this->insertLock($player_id, $lockStart, $playerCards[$i - 1]);
-            $lockStart = null;
-          }
+      // Identify and insert locks
+      foreach ($filteredChains as $chain) {
+        if (count($chain) >= 3) { // Ensure three or more consecutive cards
+          $low = $chain[0];
+          $high = end($chain);
+          self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $low, $high)");
         }
       }
     }
   }
 
+
+
+
+  private function getBoardState()
+  {
+    $boardState = [];
+    $placements = self::getObjectListFromDB($this->getBoardStateSQL());
+
+    foreach ($placements as $placement) {
+      $boardState[$placement['card_number']] = $placement['player_id'];
+    }
+
+    return $boardState;
+  }
+  private function insertChain($player_id, $start, $end)
+  {
+    self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
+  }
+
+  private function insertLock($player_id, $start, $end)
+  {
+    self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
+  }
 
   public function getBoardStateArg(): array
   {
@@ -663,34 +878,12 @@ class LockAndChain extends Table
       ORDER BY cp.card_number;
     ";
   }
-  private function getBoardState()
-  {
-    $boardState = [];
-    $placements = self::getObjectListFromDB($this->getBoardStateSQL());
-
-    foreach ($placements as $placement) {
-      $boardState[$placement['card_number']] = $placement['player_id'];
-    }
-
-    return $boardState;
-  }
-
-  private function insertChain($player_id, $start, $end)
-  {
-    self::DbQuery("INSERT INTO Chains (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
-  }
-
-  private function insertLock($player_id, $start, $end)
-  {
-    self::DbQuery("INSERT INTO Locks (player_id, start_position, end_position) VALUES ($player_id, $start, $end)");
-  }
-
   // Handle player actions
   public function playCard($card_id, $card_number)
   {
     $card = self::getObjectFromDB("SELECT * FROM Cards WHERE card_id = $card_id");
     if (!$card) {
-      throw new BgaUserException(clienttranslate("Cannot find card in playCard for card_id $card_id"));
+      throw new BgaUserException(clienttranslate("Cannot find card in playCard function"));
     }
 
     $player_id = $card["player_id"];

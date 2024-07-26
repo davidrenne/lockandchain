@@ -211,7 +211,7 @@ define([
           var playerId = this.player_id;
           this.ajaxcall(
             "/lockandchain/lockandchain/selectCard.html",
-            { player_id: playerId, card_id: cardId },
+            { player_id: playerId, card_id: cardId, lock: true },
             this,
             function (result) {}
           );
@@ -276,7 +276,7 @@ define([
       // Refresh the player's hand after resolving selections
       this.ajaxcall(
         "/lockandchain/lockandchain/getPlayerHand.html",
-        { player_id: this.player_id },
+        { player_id: this.player_id, lock: true },
         this,
         function (gamedatas) {
           this.refreshPlayerHand(gamedatas);
