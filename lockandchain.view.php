@@ -1,6 +1,20 @@
 <?php
 require_once (APP_BASE_PATH . "view/common/game.view.php");
 
+function getColorName($hexColor)
+{
+  $colors = [
+    'ff0000' => 'red',
+    '00ff00' => 'green',
+    '0000ff' => 'blue',
+    '800080' => 'purple',
+  ];
+
+  $hexColor = strtolower($hexColor);
+  return isset($colors[$hexColor]) ? $colors[$hexColor] : 'unknown';
+}
+
+
 class view_lockandchain_lockandchain extends game_view
 {
   function getGameName()
@@ -27,8 +41,9 @@ class view_lockandchain_lockandchain extends game_view
       $img = "";
       if ($topCard) {
         // A card has been placed on this position
+        $color = getColorName($topCard['card_color']);
         $cardNumber = str_pad($topCard['card_number'], 2, '0', STR_PAD_LEFT);
-        $img = "https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_{$topCard['card_color']}_{$cardNumber}.png";
+        $img = "https://studio.boardgamearena.com:8084/data/themereleases/current/games/lockandchain/999999-9999/img/lockandchainnumbers_{$color}_{$cardNumber}.png";
       } else {
         // No card placed, use the default board image
         $cardNumber = str_pad($i, 3, '0', STR_PAD_LEFT);

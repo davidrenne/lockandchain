@@ -41,6 +41,18 @@ function applyLockAnimation(newCards) {
   });
 }
 
+function getColorName(hexColor) {
+  const colors = {
+    ff0000: "red",
+    "00ff00": "green",
+    "0000ff": "blue",
+    800080: "purple",
+  };
+
+  hexColor = hexColor.toLowerCase();
+  return colors[hexColor] || "unknown";
+}
+
 define([
   "dojo",
   "dojo/_base/declare",
@@ -85,7 +97,7 @@ define([
           playerCards += this.format_block("jstpl_player_card", {
             CARD_CLASS: gamedatas.card_class,
             CARD_ID: card.card_id,
-            CARD_COLOR: card.card_type,
+            CARD_COLOR: getColorName(card.card_type),
             CARD_NUMBER: card.card_type_arg.toString().padStart(2, "0"),
           });
         }
@@ -132,33 +144,6 @@ define([
       }
       // Update the current lock state
       this.currentLocks = newLockedCards.slice();
-    },
-
-    findLocks: function (cards) {
-      var lockedCards = [];
-      var currentLock = [];
-
-      for (var i = 0; i < cards.length; i++) {
-        if (currentLock.length === 0) {
-          currentLock.push(cards[i]);
-        } else {
-          if (cards[i].color === currentLock[currentLock.length - 1].color) {
-            currentLock.push(cards[i]);
-          } else {
-            if (currentLock.length >= 3) {
-              lockedCards = lockedCards.concat(currentLock);
-            }
-            currentLock = [cards[i]]; // Reset the current lock with the new color
-          }
-        }
-      }
-
-      // Check the last sequence
-      if (currentLock.length >= 3) {
-        lockedCards = lockedCards.concat(currentLock);
-      }
-
-      return lockedCards;
     },
 
     checkForNewCards: function (newLockedCards) {
@@ -308,7 +293,7 @@ define([
         if (playerElement) {
           let aElement = playerElement.querySelector("a");
           if (aElement) {
-            aElement.style.color = player.color;
+            aElement.style.color = "#" + player.color;
           }
         }
       }
@@ -480,7 +465,7 @@ define([
         var newCardHtml = this.format_block("jstpl_player_card", {
           CARD_CLASS: notif.args.card_class,
           CARD_ID: notif.args.card_id,
-          CARD_COLOR: notif.args.card_type,
+          CARD_COLOR: getColorName(notif.args.card_type),
           CARD_NUMBER: notif.args.card_type_arg.toString().padStart(2, "0"),
         });
 
@@ -512,7 +497,7 @@ define([
       console.log(notif);
       var card_number2 = notif.args.card_number2;
       var card_number = notif.args.card_number;
-      var color = notif.args.color;
+      var color = getColorName(notif.args.color);
       // dojo.empty("cell_" + card_number); // Clear existing content
       dojo.place(
         '<div class="card_container">' +
@@ -588,7 +573,9 @@ define([
             dojo.empty("cell_" + cardNumber);
 
             // Create the new card
-            var playerColor = this.gamedatas.players[newTopPlayerId].color;
+            var playerColor = getColorName(
+              this.gamedatas.players[newTopPlayerId].color
+            );
             var cardHtml = this.format_block("jstpl_player_card", {
               CARD_ID: newTopCardId,
               CARD_COLOR: playerColor,

@@ -1,9 +1,9 @@
 <?php
 $this->colors = array(
-  "red" => array("value" => "ff0000"),
-  "purple" => array("value" => "800080"),
-  "blue" => array("value" => "0000ff"),
-  "green" => array("value" => "008000")
+  "ff0000" => array("value" => "ff0000"),
+  "800080" => array("value" => "800080"),
+  "0000ff" => array("value" => "0000ff"),
+  "00ff00" => array("value" => "00ff00")
 );
 
 $this->cards = array();

@@ -711,7 +711,7 @@ class LockAndChain extends Table
   private function initializePlayers($players)
   {
 
-    $default_colors = array("red", "blue", "green", "purple");
+    $default_colors = array("ff0000", "0000ff", "00ff00", "800080");
     $sql = "INSERT INTO player (player_id, player_name, player_color, player_canal, player_avatar) VALUES ";
     $values = array();
     foreach ($players as $player_id => $player) {
@@ -720,7 +720,7 @@ class LockAndChain extends Table
     }
     $sql .= implode(',', $values);
     self::DbQuery($sql);
-    $this->reattributeColorsBasedOnPreferences($players, array("red", "blue", "green", "purple"));
+    $this->reattributeColorsBasedOnPreferences($players, array("ff0000", "0000ff", "00ff00", "800080"));
   }
 
   private function dealInitialHands($players)
